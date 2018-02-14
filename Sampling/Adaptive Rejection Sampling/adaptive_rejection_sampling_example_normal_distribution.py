@@ -1,3 +1,9 @@
+'''
+This implementation is made By: Luis Ricardo Pena Llamas, this code is an implementation of a Journal named:
+Gilks, W. R., & Wild, P. (1992). Adaptive rejection sampling for Gibbs sampling. Applied Statistics, 337-348.
+With only one example, log normal as h(x).
+'''
+
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sc

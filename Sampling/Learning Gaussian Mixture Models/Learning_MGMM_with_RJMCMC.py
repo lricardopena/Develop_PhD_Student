@@ -1,3 +1,8 @@
+'''
+This implementation is made By: Luis Ricardo Pena Llamas, this code is an implementation of a Journal named:
+Zhang, Z., Chan, K. L., Wu, Y., & Chen, C. (2004). Learning a multivariate Gaussian mixture model with the reversible jump MCMC algorithm. Statistics and Computing, 14(4), 343-355.
+'''
+
 import math
 import sys
 
