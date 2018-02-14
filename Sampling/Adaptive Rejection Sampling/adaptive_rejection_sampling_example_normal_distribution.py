@@ -109,7 +109,7 @@ def compute_uk_single_x(x, Z, mean, sigma, Tk, x0, xk_plus_1):
     if x < x0:
         x = x0
     elif x > xk_plus_1:
-        xk_plus_1
+        x = xk_plus_1
 
     # we truncate the samples
     for j in range(-1, len(Z)):

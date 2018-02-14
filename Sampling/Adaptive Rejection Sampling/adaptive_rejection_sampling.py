@@ -8,13 +8,24 @@ It is necessary to give and h function, which is log concave and its derivative 
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sc
-import scipy.special
 import scipy.stats
 
-def compute_all_Zj(Tk, mean, sigma, x0, xk_plus_1):
+
+def compute_all_Zj(Tk, x0, xk_plus_1, h_function, h_derivative_function, *args):
+    '''
+    :param List Tk: List of with all rejected sampled
+    :param x0: Left bound to the sampling
+    :param xk_plus_1: Right bound to the sampling
+    :param h_function: Function h to be log concave, the arguments of the function must be like h(x, *args), where x is
+    the sample and *args is all other arguments
+    :param h_derivative_function: Derivative of h function, it must be like h'(x, *args), where x is the sample and
+    *args is all other arguments necessary to the function
+    :param args: Is all the arguments needed to the h function and its derivative
+    :return: A list with all z1, z2, ...., zk (all the intersection between points)
+    '''
     Z = []
     for j in range(-1, len(Tk)):
-        zj = compute_Zj(j, Tk, mean, sigma, x0, xk_plus_1)
+        zj = compute_Zj(j, Tk, x0, xk_plus_1, h_function, h_derivative_function, *args)
         Z.append(zj)
     return Z
 
@@ -43,48 +54,57 @@ def compute_Zj(j, Tk, x0, xk_plus_1, h_function, h_derivative_function, *args):
         xj = Tk[j]
         xj_plus_1 = xk_plus_1
 
-    zj = (h_function(xj_plus_1, *args) - h_function(xj, args) - xj_plus_1 * h_derivative_function(xj_plus_1,
-        args) + xj * h_derivative_function(xj, args)) / (h_derivative_function(xj,
-                                                                               args) - h_derivative_function(xj_plus_1, args))
+    zj = (h_function(xj_plus_1, *args) - h_function(xj, *args) - xj_plus_1 * h_derivative_function(xj_plus_1,
+                                                                                                   *args) + xj * h_derivative_function(
+        xj, *args)) / (h_derivative_function(xj,
+                                             *args) - h_derivative_function(xj_plus_1, *args))
 
     return zj
 
 
-def compute_lk_single_x(x, mean, sigma, Tk, x0, xk_plus_1):
+def compute_lk_single_x(x, Tk, x0, xk_plus_1, h_function, *args):
+    '''
+    :param x: Is variable to compute the value of l_k(x)
+    :param Tk: All sampled rejected
+    :param x0: Left bound to the sampling
+    :param xk_plus_1: Right bound to the sampling
+    :param h_function: Function h to be log concave, the arguments of the function must be like h(x, *args), where x is
+    the sample and *args is all other arguments
+    :param args: Is all the arguments needed to the h function and its derivative
+    :return: The value of l_k(x)
+    '''
     if x < x0:
         x = x0
     elif x > xk_plus_1:
         x = xk_plus_1
 
-    for j in range(-1, len(Tk)):
-        if j < 0:  # Start x0
-            xj = x0
-            xj_plus_1 = Tk[0]
-        elif j < len(Tk) - 1:
-            xj = Tk[j]
-            xj_plus_1 = Tk[j + 1]
-        else:  # Finish xk_plus_1
-            xj = Tk[j]
-            xj_plus_1 = xk_plus_1
-        if xj <= x <= xj_plus_1:
-            return ((xj_plus_1 - x) * h_log_normal(xj, mean, sigma) + (x - xj) * h_log_normal(xj_plus_1, mean,
-                                                                                              sigma)) / (
+    if x < Tk[0]:
+        xj = x0
+        xj_plus_1 = Tk[0]
+    elif x > Tk[len(Tk) - 1]:
+        xj = Tk[len(Tk) - 1]
+        xj_plus_1 = xk_plus_1
+    else:
+        j = np.where(Tk >= x)[0][0]
+        xj = Tk[j - 1]
+        xj_plus_1 = Tk[j]
+
+    return ((xj_plus_1 - x) * h_function(xj, *args) + (x - xj) * h_function(xj_plus_1, *args)) / (
                            xj_plus_1 - xj)
 
 
-def compute_lk(mean, sigma, Tk, x0, xk_plus_1):
+def compute_lk(Tk, x0, xk_plus_1, h_function, *args):
+    '''
+    :param Tk: All sampled rejected
+    :param x0: Left bound to the sampling
+    :param xk_plus_1: Right bound to the sampling
+    :param h_function: Function h to be log concave, the arguments of the function must be like h(x, *args), where x is
+    the sample and *args is all other arguments
+    :param args: Is all the arguments needed to the h function and its derivative
+    :return: All DISCRETE values of l_k(x) and all x related to x value of l_k(x)
+    '''
     lk = np.array([])
     Xk = np.array([])
-
-    '''X = np.linspace(x0, xk_plus_1, 1000)
-    Y = h_log_normal(X, mean, sigma)
-    plt.plot(X, Y, label='h(x)')
-
-    Tk_ext = np.array([x0])
-    Tk_ext = np.append(Tk_ext, Tk)
-    Tk_ext = np.append(Tk_ext, [xk_plus_1])
-    Y = h_log_normal(Tk_ext, mean, sigma)
-    plt.scatter(Tk_ext, Y, label='Elemnts in Tk')'''
 
     for j in range(-1, len(Tk)):
         if j < 0:  # Start x0
@@ -99,55 +119,61 @@ def compute_lk(mean, sigma, Tk, x0, xk_plus_1):
 
         X = np.linspace(xj, xj_plus_1)
         Xk = np.append(Xk, X)
-        Y = ((xj_plus_1 - X) * h_log_normal(xj, mean, sigma) + (X - xj) * h_log_normal(xj_plus_1, mean, sigma)) / (
+        Y = ((xj_plus_1 - X) * h_function(xj, *args) + (X - xj) * h_function(xj_plus_1, *args)) / (
                 xj_plus_1 - xj)
         lk = np.append(lk, Y)
-        # plt.plot(X, Y, label='l_k(x' + str(j + 1) + ')')
 
-    # plt.legend()
-    # plt.show()
     return lk, Xk
 
 
-def compute_uk_single_x(x, Z, mean, sigma, Tk, x0, xk_plus_1):
+def compute_uk_single_x(x, Z, Tk, x0, xk_plus_1, h_function, h_derivative_function, *args):
+    '''
+    :param x: Is variable to compute the value of u_k(x)
+    :param Z: Is the list with all values in z1, z2,... zk (the intersection between xj and xj_plus_1
+    :param Tk: All sampled rejected
+    :param x0: Left bound to the sampling
+    :param xk_plus_1: Right bound to the sampling
+    :param h_function: Function h to be log concave, the arguments of the function must be like h(x, *args), where x is
+    the sample and *args is all other arguments
+    :param h_derivative_function: Derivative of h function, it must be like h'(x, *args), where x is the sample and
+    *args is all other arguments necessary to the function
+    :param args: Is all the arguments needed to the h function and its derivative
+    :return:
+    '''
+    # we truncate x (the samples) between x0 and xk_plus_1
     if x < x0:
         x = x0
     elif x > xk_plus_1:
-        xk_plus_1
+        x = xk_plus_1
 
-    # we truncate the samples
-    for j in range(-1, len(Z)):
-        if j < 0:
-            zj = x0
-            zj_plus_1 = Z[j + 1]
-            xj = x0
-        elif j < len(Z) - 1:
-            zj = Z[j]
-            zj_plus_1 = Z[j + 1]
-            xj = Tk[j]
-        else:
-            zj = Z[j]
-            zj_plus_1 = xk_plus_1
-            xj = xk_plus_1
-
-        if zj <= x <= zj_plus_1:
-            return (h_log_normal(xj, mean, sigma)) + (x - xj) * h_derivative_log_normal(xj, mean, sigma)
-    print("error")
+    if x > Z[len(Z) - 1]:
+        xj = xk_plus_1
+    elif x < Z[0]:
+        xj = x0
+    else:
+        j = np.where(Z >= x)[0][0]
+        # Z[j-1] <= x <= Z[j]
+        xj = Tk[j - 1]
+    # (h_log_normal(xj, mean, sigma)) + (x - xj) * h_derivative_log_normal(xj, mean, sigma)
+    return (h_function(xj, *args)) + (x - xj) * h_derivative_function(xj, *args)
 
 
-def compute_uk(Z, mean, sigma, Tk, x0, xk_plus_1, number_of_elements_linespace):
+def compute_uk(Z, Tk, x0, xk_plus_1, number_of_elements_linespace, h_function, h_derivative_function, *args):
+    '''
+    :param List Z: Is the list with all values in z1, z2,... zk (the intersection between xj and xj_plus_1
+    :param Tk: All sampled rejected
+    :param x0: Left bound to the sampling
+    :param xk_plus_1: Right bound to the sampling
+    :param number_of_elements_linespace: The number of elements between zj and zj_plus_1
+    :param h_function: Function h to be log concave, the arguments of the function must be like h(x, *args), where x is
+    the sample and *args is all other arguments
+    :param h_derivative_function: Derivative of h function, it must be like h'(x, *args), where x is the sample and
+    *args is all other arguments necessary to the function
+    :param args: Is all the arguments needed to the h function and its derivative
+    :return: All the DISCRETE points in u_k(x) and its correspondent x between x0 and x_plus_1
+    '''
     uk = np.array([])
     Xk = np.array([])
-
-    '''X = np.linspace(x0, xk_plus_1, 1000)
-    Y = h_log_normal(X, mean, sigma)
-    plt.plot(X, Y, label='h(x)')
-
-    Tk_ext = np.array([x0])
-    Tk_ext = np.append(Tk_ext, Tk)
-    Tk_ext = np.append(Tk_ext, [xk_plus_1])
-    Y = h_log_normal(Tk_ext, mean, sigma)
-    plt.scatter(Tk_ext, Y, label='Elemnts in Tk')'''
 
     for j in range(-1, len(Z)):
         if j < 0:  # Start x0
@@ -160,22 +186,21 @@ def compute_uk(Z, mean, sigma, Tk, x0, xk_plus_1, number_of_elements_linespace):
             xj = xk_plus_1
             X = np.linspace(Z[j], xk_plus_1, number_of_elements_linespace)
         Xk = np.append(Xk, X)
-        Y = (h_log_normal(xj, mean, sigma)) + (X - xj) * h_derivative_log_normal(xj, mean, sigma)
+        Y = (h_function(xj, *args)) + (X - xj) * h_derivative_function(xj, *args)
         uk = np.append(uk, Y)
-        # plt.plot(X, Y, label='g_u(x' + str(j + 1) + ')')
-
-    # plt.legend()
-    # plt.show()
 
     return uk, Xk
 
 
 def sample_from_sk(sk, Xk, plot_every_step, Tk):
-    C = np.sum(sk)
-    sk = sk / C
-    cumulative_sk = np.cumsum(sk)
-
-
+    '''
+    :param sk: All elements in s_k(x)
+    :param Xk: The correspondendt value x to s_k(x)
+    :param plot_every_step: Boolean to determine if plot every sample from s_k(x)
+    :param Tk: A list with rejected samples
+    :return: a sample from from s_k(x)
+    '''
+    cumulative_sk = np.cumsum(sk / np.sum(sk))
 
     u = np.random.uniform()
     indexXj = np.where(cumulative_sk >= u)[0][0]
@@ -188,114 +213,138 @@ def sample_from_sk(sk, Xk, plot_every_step, Tk):
         for j, xk in enumerate(Tk):
             Y.append(cumulative_sk[np.where(Xk >= xk)][0])
         plt.scatter(Tk, Y, label='Elements in Tk')
-        # x = (np.log(u) - h_log_normal(xj, mean, sigma)) / h_derivative_log_normal(xj, mean, sigma) + xj
         plt.legend()
         plt.show()
     return x
 
 
-def compute_sk_sample_x(Tk, mean, sigma, x0, xk_plus_1, number_of_elements_linespace):
-    Z = compute_all_Zj(Tk, mean, sigma, x0, xk_plus_1)
-    Uk, Xk = compute_uk(Z, mean, sigma, Tk, x0, xk_plus_1, number_of_elements_linespace)
+def compute_sk_sample_x(Tk, x0, xk_plus_1, number_of_elements_linespace, h_function, h_derivative_function, *args):
+    '''
+    :param List Tk: All sampled rejected
+    :param float x0: Left bound to the sampling
+    :param xk_plus_1: Right bound to the sampling
+    :param number_of_elements_linespace: The number of elements between zj and zj_plus_1
+    :param h_function: Function h to be log concave, the arguments of the function must be like h(x, *args), where x is
+    the sample and *args is all other arguments
+    :param h_derivative_function: Derivative of h function, it must be like h'(x, *args), where x is the sample and
+    *args is all other arguments necessary to the function
+    :param args: Is all the arguments needed to the h function and its derivative
+    :return: An array with all elements DESCRETE from x0 to xk_plus_1 in s_k(x) and the corresponding values x
+    '''
+    Z = compute_all_Zj(Tk, x0, xk_plus_1, h_function, h_derivative_function, *args)
+    Uk, Xk = compute_uk(Z, Tk, x0, xk_plus_1, number_of_elements_linespace, h_function, h_derivative_function, *args)
     sk = np.exp(Uk)
     return sk, Xk
 
 
-def perform_ARS_log_normal(mean, sigma, number_of_samples, Tk, x0, xk_plus_1, plot_every_step=False):
+def perform_ARS_log_normal(number_of_samples, Tk, x0, xk_plus_1, plot_every_step, number_of_elements_linespace,
+                           h_function, h_derivative_function, *args):
+    '''
+    :param number_of_samples: The number of samples needed
+    :param Tk: Initial elements in rejected samples
+    :param float x0: Left bound to the sampling
+    :param xk_plus_1: Right bound to the sampling
+    :param plot_every_step: Boolean True if you want to plot every step in ARS
+    :param number_of_elements_linespace: The number of elements between xj and xj_plus_1 (Big numbers of elements make
+    the sampling more accurate, but more slow)
+    :param h_function: Function h to be log concave, the arguments of the function must be like h(x, *args), where x is
+    the sample and *args is all other arguments
+    :param h_derivative_function: Derivative of h function, it must be like h'(x, *args), where x is the sample and
+    *args is all other arguments necessary to the function
+    :param args: Is all the arguments needed to the h function and its derivative
+    :return: Samples generated from h(x), and all rejected sampled (Tk)
+    '''
     x_samples = []
-    number_of_elements_linespace = 10000
+    Zk = compute_all_Zj(Tk, x0, xk_plus_1, h_function, h_derivative_function, *args)
+
+    Sk, Xk = compute_sk_sample_x(Tk, x0, xk_plus_1, number_of_elements_linespace, h_function,
+                                 h_derivative_function, *args)
     while len(x_samples) < number_of_samples:
+
+        x_proposal = sample_from_sk(Sk, Xk, plot_every_step, Tk)
+
+        lk_x_proposal = compute_lk_single_x(x_proposal, Tk, x0, xk_plus_1, h_function, *args)
+        uk_x_proposal = compute_uk_single_x(x_proposal, Zk, Tk, x0, xk_plus_1, h_function, h_derivative_function, *args)
+
+        p = np.exp(lk_x_proposal - uk_x_proposal)
+        w = np.random.uniform()
+        if p > w:
+            x_samples.append(x_proposal)
+        else:
+            Tk.append(x_proposal)
+            Tk = sorted(Tk)
+            Zk = compute_all_Zj(Tk, x0, xk_plus_1, h_function, h_derivative_function, *args)
+            Sk, Xk = compute_sk_sample_x(Tk, x0, xk_plus_1, number_of_elements_linespace, h_function,
+                                         h_derivative_function, *args)
+
         if plot_every_step:
             X = np.linspace(x0, xk_plus_1, 1000)
-            Y = h_log_normal(X, mean, sigma)
+            Y = h_function(X, *args)
             plt.plot(X, Y, label='h(x)')
 
             Tk_ext = np.array([x0])
             Tk_ext = np.append(Tk_ext, Tk)
             Tk_ext = np.append(Tk_ext, [xk_plus_1])
-            Y = h_log_normal(Tk_ext, mean, sigma)
+            Y = h_function(Tk_ext, *args)
             plt.scatter(Tk_ext, Y, label='Elemnts in Tk')
 
-            Z = compute_all_Zj(Tk, mean, sigma, x0, xk_plus_1)
-            Uk, Xk = compute_uk(Z, mean, sigma, Tk, x0, xk_plus_1, number_of_elements_linespace)
+            Z = compute_all_Zj(Tk, x0, xk_plus_1, h_function, h_derivative_function, *args)
+            Uk = np.log(Sk)
             plt.plot(Xk, Uk, label='Lines Uk')
-            Lk, Xk = compute_lk(mean, sigma, Tk, x0, xk_plus_1)
+            Lk, Xk = compute_lk(Tk, x0, xk_plus_1, h_function, *args)
             plt.plot(Xk, Lk, label='Lines lk')
 
             if len(x_samples) > 0:
                 Y = []
                 for x_samp in x_samples:
-                    y = compute_uk_single_x(x_samp, Z, mean, sigma, Tk, x0, xk_plus_1)
+                    y = compute_uk_single_x(x_samp, Z, Tk, x0, xk_plus_1, h_function, h_derivative_function, *args)
                     Y.append(y)
                 plt.scatter(x_samples, Y, label='Samples')
 
             plt.legend()
             plt.show()
 
-        Zk = compute_all_Zj(Tk, mean, sigma, x0, xk_plus_1)
+    if plot_every_step:
+        X = np.linspace(x0, xk_plus_1, 1000)
+        Y = h_function(X, *args)
+        plt.plot(X, Y, label='h(x)')
 
-        Sk, Xk = compute_sk_sample_x(Tk, mean, sigma, x0, xk_plus_1, number_of_elements_linespace)
-        x_proposal = sample_from_sk(Sk, Xk, plot_every_step, Tk)
+        Tk_ext = np.array([x0])
+        Tk_ext = np.append(Tk_ext, Tk)
+        Tk_ext = np.append(Tk_ext, [xk_plus_1])
+        Y = h_function(Tk_ext, *args)
+        plt.scatter(Tk_ext, Y, label='Elemnts in Tk')
 
-        lk_x_proposal = compute_lk_single_x(x_proposal, mean, sigma, Tk, x0, xk_plus_1)
-        uk_x_proposal = compute_uk_single_x(x_proposal, Zk, mean, sigma, Tk, x0, xk_plus_1)
+        Z = compute_all_Zj(Tk, x0, xk_plus_1, h_function, h_derivative_function, *args)
+        Uk, Xk = compute_uk(Z, Tk, x0, xk_plus_1, number_of_elements_linespace, h_function, h_derivative_function,
+                            *args)
+        plt.plot(Xk, Uk, label='Lines Uk')
+        Lk, Xk = compute_lk(Tk, x0, xk_plus_1, h_function, *args)
+        plt.plot(Xk, Lk, label='Lines lk')
 
-        p = np.exp(lk_x_proposal - uk_x_proposal)
-        w = np.random.uniform()
-        if p > w:
-            x_samples.append(x_proposal)
-            # Uk, Xk = compute_uk(Zk, mean, sigma, Tk, x0, xk_plus_1, number_of_elements_linespace)
-            # plt.plot(Xk, np.exp(Uk), label='Lines Uk')
-            # plt.scatter(x_samples, np.exp(h_log_normal(np.array(x_samples), mean, sigma)), label='Samples')
-            # plt.legend()
-            # plt.show()
-        else:
-            Tk.append(x_proposal)
-            Tk = sorted(Tk)
+        if len(x_samples) > 0:
+            Y = []
+            for x_samp in x_samples:
+                y = compute_uk_single_x(x_samp, Z, Tk, x0, xk_plus_1, h_function, h_derivative_function, *args)
+                Y.append(y)
+            plt.scatter(x_samples, Y, label='Samples')
 
-    X = np.linspace(x0, xk_plus_1, 1000)
-    Y = h_log_normal(X, mean, sigma)
-    plt.plot(X, Y, label='h(x)')
+        plt.legend()
+        plt.show()
 
-    Tk_ext = np.array([x0])
-    Tk_ext = np.append(Tk_ext, Tk)
-    Tk_ext = np.append(Tk_ext, [xk_plus_1])
-    Y = h_log_normal(Tk_ext, mean, sigma)
-    plt.scatter(Tk_ext, Y, label='Elemnts in Tk')
+    return x_samples, Tk
 
-    Z = compute_all_Zj(Tk, mean, sigma, x0, xk_plus_1)
-    Uk, Xk = compute_uk(Z, mean, sigma, Tk, x0, xk_plus_1, number_of_elements_linespace)
-    plt.plot(Xk, Uk, label='Lines Uk')
-    Lk, Xk = compute_lk(mean, sigma, Tk, x0, xk_plus_1)
-    plt.plot(Xk, Lk, label='Lines lk')
 
-    if len(x_samples) > 0:
-        Y = []
-        for x_samp in x_samples:
-            y = compute_uk_single_x(x_samp, Z, mean, sigma, Tk, x0, xk_plus_1)
-            Y.append(y)
-        plt.scatter(x_samples, Y, label='Samples')
+def h_log_normal(X, *args):
+    mean = args[0]
+    sigma = args[1]
+    return -((X - mean)) ** 2 / (2 * sigma ** 2)
 
-    plt.legend()
-    plt.show()
 
-    print "Number of elements in Tk: " + str(len(Tk))
-
-    Y = scipy.stats.norm.pdf(x_samples, loc=mean, scale=sigma)
-    plt.scatter(x_samples, Y, label='samples')
-    Y = scipy.stats.norm.pdf(Tk, loc=mean, scale=sigma)
-    plt.scatter(Tk, Y, label='samples')
-
-    X = np.linspace(-1000, 1000, 10000)
-    Y = scipy.stats.norm.pdf(X, loc=mean, scale=sigma)
-
-    plt.plot(X, Y, label='Function')
-
-    plt.legend()
-    plt.show()
-
-    return x_samples
-
+def h_derivative_log_normal(X, *args):
+    mean = args[0]
+    sigma = args[1]
+    return -(X - mean) / (sigma ** 2)
 
 def main():
     mean = 100.
@@ -303,13 +352,10 @@ def main():
     Tk = [-30, 170]
     x0 = -500
     xk_plus_1 = 700
-    # X = np.linspace(x0, xk_plus_1, 10000)
-    # Y = sc.stats.norm.pdf(X, loc=mean, scale=sigma)
-    # plt.plot(X, Y, label='Normal Distribution mean = ' + str(mean) + " variance = " + str(sigma))
-    # plt.legend()
-    # plt.show()
 
-    x_samples = perform_ARS_log_normal(mean, sigma, 10000, Tk, x0, xk_plus_1, plot_every_step=False)
+    x_samples, x_rejected = perform_ARS_log_normal(10000, Tk, x0, xk_plus_1, False, 10000, h_log_normal,
+                                                   h_derivative_log_normal,
+                                                   mean, sigma)
 
     x_left = np.min(x_samples)
     x_right = np.max(x_samples)
