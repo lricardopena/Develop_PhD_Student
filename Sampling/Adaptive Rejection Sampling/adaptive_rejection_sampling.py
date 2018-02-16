@@ -8,12 +8,14 @@ It is necessary to give and h function, which is log concave and its derivative 
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sc
+import scipy.special
 import scipy.stats
 
 
 class ARS:
 
-    def __init__(self, Tk, x0, xk_plus_1, number_of_elements_linespace, h_function, h_derivative_function, *args):
+    def __init__(self, Tk=None, x0=0, xk_plus_1=500, number_of_elements_linespace=10000, h_function=None,
+                 h_derivative_function=None, *args):
         self.args = args
         self.Tk = Tk
         self.x0 = x0
@@ -22,17 +24,17 @@ class ARS:
         self.h_function = h_function
         self.h_derivative_function = h_derivative_function
 
-    def compute_all_Zj(self):
+    def __compute_all_Zj(self):
         '''
         :return: A list with all z1, z2, ...., zk (all the intersection between points)
         '''
         Z = []
         for j in range(-1, len(self.Tk)):
-            zj = self.compute_Zj(j)
+            zj = self.__compute_Zj(j)
             Z.append(zj)
         return Z
 
-    def compute_Zj(self, j):
+    def __compute_Zj(self, j):
         '''
         :param j: index for Tk
         :return: The element zj, where interect xj and xj_plus_1
@@ -55,7 +57,7 @@ class ARS:
 
         return zj
 
-    def compute_lk_single_x(self, x):
+    def __compute_lk_single_x(self, x):
         '''
         :param x: Is variable to compute the value of l_k(x)
         :return: The value of l_k(x)
@@ -80,7 +82,7 @@ class ARS:
                                                                                                *self.args)) / (
                        xj_plus_1 - xj)
 
-    def compute_lk(self):
+    def __compute_lk(self):
         '''
         :return: All DISCRETE values of l_k(x) and all x related to x value of l_k(x)
         '''
@@ -107,7 +109,7 @@ class ARS:
 
         return lk, Xk
 
-    def compute_uk_single_x(self, x, Z):
+    def __compute_uk_single_x(self, x, Z):
         '''
         :param x: Is variable to compute the value of u_k(x)
         :param Z: Is the list with all values in z1, z2,... zk (the intersection between xj and xj_plus_1
@@ -130,7 +132,7 @@ class ARS:
         # (h_log_normal(xj, mean, sigma)) + (x - xj) * h_derivative_log_normal(xj, mean, sigma)
         return (self.h_function(xj, *self.args)) + (x - xj) * self.h_derivative_function(xj, *self.args)
 
-    def compute_uk(self, Z):
+    def __compute_uk(self, Z):
         '''
         :param List Z: Is the list with all values in z1, z2,... zk (the intersection between xj and xj_plus_1
         :return: All the DISCRETE points in u_k(x) and its correspondent x between x0 and x_plus_1
@@ -154,7 +156,7 @@ class ARS:
 
         return uk, Xk
 
-    def sample_from_sk(self, sk, Xk, plot_every_step):
+    def __sample_from_sk(self, sk, Xk, plot_every_step):
         '''
         :param sk: All elements in s_k(x)
         :param Xk: The correspondendt value x to s_k(x)
@@ -178,15 +180,15 @@ class ARS:
             plt.show()
         return x
 
-    def compute_sk(self, Zk):
+    def __compute_sk(self, Zk):
         '''
         :return: An array with all elements DESCRETE from x0 to xk_plus_1 in s_k(x) and the corresponding values x
         '''
-        Uk, Xk = self.compute_uk(Zk)
+        Uk, Xk = self.__compute_uk(Zk)
         sk = np.exp(Uk)
         return sk, Xk
 
-    def perform_ARS_log_normal(self, number_of_samples, plot_every_step):
+    def perform_ARS(self, number_of_samples, plot_every_step=False):
         '''
         :param number_of_samples: The number of samples to be generated
         :param number_of_elements_linespace: The number of elements between xj and xj_plus_1 (Big numbers of elements make
@@ -194,14 +196,14 @@ class ARS:
         :return: Samples generated from h(x)
         '''
         x_samples = []
-        Z = self.compute_all_Zj()
-        Sk, Xk = self.compute_sk(Z)
+        Z = self.__compute_all_Zj()
+        Sk, Xk = self.__compute_sk(Z)
 
         while len(x_samples) < number_of_samples:
-            x_proposal = self.sample_from_sk(Sk, Xk, plot_every_step)
+            x_proposal = self.__sample_from_sk(Sk, Xk, plot_every_step)
 
-            lk_x_proposal = self.compute_lk_single_x(x_proposal)
-            uk_x_proposal = self.compute_uk_single_x(x_proposal, Z)
+            lk_x_proposal = self.__compute_lk_single_x(x_proposal)
+            uk_x_proposal = self.__compute_uk_single_x(x_proposal, Z)
 
             p = np.exp(lk_x_proposal - uk_x_proposal)
             w = np.random.uniform()
@@ -210,8 +212,8 @@ class ARS:
             else:
                 self.Tk.append(x_proposal)
                 self.Tk = sorted(self.Tk)
-                Z = self.compute_all_Zj()
-                Sk, Xk = self.compute_sk(Z)
+                Z = self.__compute_all_Zj()
+                Sk, Xk = self.__compute_sk(Z)
 
             if plot_every_step:
                 X = np.linspace(self.x0, self.xk_plus_1, 1000)
@@ -223,17 +225,16 @@ class ARS:
                 Tk_ext = np.append(Tk_ext, [self.xk_plus_1])
                 Y = self.h_function(Tk_ext, *self.args)
                 plt.scatter(Tk_ext, Y, label='Elemnts in Tk')
-
-                Z = self.compute_all_Zj()
-                Uk = np.log(Sk)
-                plt.plot(Xk, Uk, label='Lines Uk')
-                Lk, Xk = self.compute_lk()
-                plt.plot(Xk, Lk, label='Lines lk')
+                Uk, X = self.__compute_uk(Z)
+                # Uk = np.log(Sk)
+                plt.plot(X, Uk, label='Lines Uk')
+                Lk, X = self.__compute_lk()
+                plt.plot(X, Lk, label='Lines lk')
 
                 if len(x_samples) > 0:
                     Y = []
                     for x_samp in x_samples:
-                        y = self.compute_uk_single_x(x_samp)
+                        y = self.__compute_uk_single_x(x_samp, Z)
                         Y.append(y)
                     plt.scatter(x_samples, Y, label='Samples')
 
@@ -251,16 +252,15 @@ class ARS:
             Y = self.h_function(Tk_ext, *self.args)
             plt.scatter(Tk_ext, Y, label='Elemnts in Tk')
 
-            Z = self.compute_all_Zj()
-            Uk, Xk = self.compute_uk(Z)
-            plt.plot(Xk, Uk, label='Lines Uk')
-            Lk, Xk = self.compute_lk()
-            plt.plot(Xk, Lk, label='Lines lk')
+            Uk, X = self.__compute_uk(Z)
+            plt.plot(X, Uk, label='Lines Uk')
+            Lk, X = self.__compute_lk()
+            plt.plot(X, Lk, label='Lines lk')
 
             if len(x_samples) > 0:
                 Y = []
                 for x_samp in x_samples:
-                    y = self.compute_uk_single_x(x_samp, Z)
+                    y = self.__compute_uk_single_x(x_samp, Z)
                     Y.append(y)
                 plt.scatter(x_samples, Y, label='Samples')
 
@@ -269,28 +269,84 @@ class ARS:
 
         return x_samples
 
+    def example_ARS_log_normal_to_x(self, mean, sigma, Tk, x0, xk_plus_1, number_of_samples,
+                                    number_of_elements_linespace=10000, plot_every_step=False):
+        self.xk_plus_1 = xk_plus_1
+        self.number_of_elements_linespace = number_of_elements_linespace
+        self.args = [mean, sigma]
+        self.Tk = Tk
+        self.x0 = x0
+        self.h_function = self.__h_log_normal
+        self.h_derivative_function = self.h_derivative_function
 
-def h_log_normal(X, *args):
-    mean = args[0]
-    sigma = args[1]
-    return -((X - mean)) ** 2 / (2 * sigma ** 2)
+        return self.perform_ARS(number_of_samples, plot_every_step)
+
+    def __h_log_normal(self, X, *args):
+        mean = args[0]
+        sigma = args[1]
+        return -((X - mean)) ** 2 / (2 * sigma ** 2)
+
+    def __h_derivative_log_normal(self, X, *args):
+        mean = args[0]
+        sigma = args[1]
+        return -(X - mean) / (sigma ** 2)
 
 
-def h_derivative_log_normal(X, *args):
-    mean = args[0]
-    sigma = args[1]
-    return -(X - mean) / (sigma ** 2)
+def h_log(log_beta, *args):
+    S = args[0]
+    w = args[1]
+    K = len(S)
+    value = -K * sc.special.gammaln(log_beta / 2.).real - 1. / (2 * log_beta) + (
+                K * log_beta - 3) / 2.  # * (np.log(log_beta/2))
+    S_times_w = S * w
+    value += log_beta / 2. * np.sum(np.log(S_times_w) - S_times_w)
+    return value
+
+
+def h_derivative(log_beta, *args):
+    S = args[0]
+    w = args[1]
+    K = len(S)
+    value = -K * sc.special.digamma(log_beta) - 1. / (2 * log_beta ** 2) + (K * log_beta - 3) / (2. * log_beta) + (
+                np.log(log_beta) - np.log(2)) * K / 2.
+    S_times_w = S * w
+    value += np.sum(np.log(S_times_w) - S_times_w) / 2.
+    return value
 
 def main():
-    mean = 100.
-    sigma = 10.
-    Tk = [-30, 170]
-    x0 = -500
-    xk_plus_1 = 700
+    means = [0, 10, 100]
+    sigma = [1, 2, 3]
 
-    ars_Sampling = ARS(Tk, x0, xk_plus_1, 10000, h_log_normal, h_derivative_log_normal, mean, sigma)
+    X = sc.stats.norm.rvs(loc=means[0], scale=sigma[0], size=500)
+    X = np.append(X, sc.stats.norm.rvs(loc=means[1], scale=sigma[1], size=500))
+    X = np.append(X, sc.stats.norm.rvs(loc=means[2], scale=sigma[2], size=500))
 
-    x_samples = ars_Sampling.perform_ARS_log_normal(10000, False)
+    sigma_y = np.std(X)
+    s = 1. / np.array(sigma)
+    w = sc.stats.gamma.rvs(1, sigma_y, size=1)[0]
+
+    X = np.linspace(0.00001, 0.9999999999, 1000)
+    Y = h_log(np.log(X), s, w)
+    plt.plot(X, Y)
+    plt.show()
+
+    X = np.linspace(1.0001, 1000, 1000)
+    Y = h_log(np.log(X), s, w)
+    plt.plot(X, Y)
+    plt.show()
+
+    h_log(500, s, 50)
+    mean = 0.
+    sigma = 100.
+    Tk = [-300, 470]
+    x0 = -800
+    xk_plus_1 = 800
+
+    ars = ARS(Tk, x0, xk_plus_1, 100000, h_log, h_derivative, mean, sigma)
+    x_samples = ars.example_ARS_log_normal_to_x(mean, sigma, Tk, x0, xk_plus_1, 10000)
+
+    # ars_Sampling = ARS(Tk, x0, xk_plus_1, 10000, h_log_normal, h_derivative_log_normal, mean, sigma)
+    #x_samples = ars_Sampling.perform_ARS(10000)
 
     x_left = np.min(x_samples)
     x_right = np.max(x_samples)
