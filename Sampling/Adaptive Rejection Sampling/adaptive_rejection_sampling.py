@@ -9,12 +9,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sc
 import scipy.special
-import scipy.stats
 
 
 class ARS:
 
-    def __init__(self, Tk=None, x0=0, xk_plus_1=500, number_of_elements_linespace=10000, h_function=None,
+    def __init__(self, Tk=None, x0=0.0, xk_plus_1=500., number_of_elements_linespace=10000, h_function=None,
                  h_derivative_function=None, *args):
         self.args = args
         self.Tk = Tk
@@ -186,6 +185,7 @@ class ARS:
         '''
         Uk, Xk = self.__compute_uk(Zk)
         sk = np.exp(Uk)
+        sk = np.nan_to_num(sk)
         return sk, Xk
 
     def perform_ARS(self, number_of_samples, plot_every_step=False):
@@ -200,46 +200,49 @@ class ARS:
         Sk, Xk = self.__compute_sk(Z)
 
         while len(x_samples) < number_of_samples:
-            x_proposal = self.__sample_from_sk(Sk, Xk, plot_every_step)
+            try:
+                x_proposal = self.__sample_from_sk(Sk, Xk, plot_every_step)
 
-            lk_x_proposal = self.__compute_lk_single_x(x_proposal)
-            uk_x_proposal = self.__compute_uk_single_x(x_proposal, Z)
+                lk_x_proposal = self.__compute_lk_single_x(x_proposal)
+                uk_x_proposal = self.__compute_uk_single_x(x_proposal, Z)
 
-            p = np.exp(lk_x_proposal - uk_x_proposal)
-            w = np.random.uniform()
-            if p > w:
-                x_samples.append(x_proposal)
-            else:
-                self.Tk.append(x_proposal)
-                self.Tk = sorted(self.Tk)
-                Z = self.__compute_all_Zj()
-                Sk, Xk = self.__compute_sk(Z)
+                p = np.exp(lk_x_proposal - uk_x_proposal)
+                w = np.random.uniform()
+                if p > w:
+                    x_samples.append(x_proposal)
+                else:
+                    self.Tk.append(x_proposal)
+                    self.Tk = sorted(self.Tk)
+                    Z = self.__compute_all_Zj()
+                    Sk, Xk = self.__compute_sk(Z)
 
-            if plot_every_step:
-                X = np.linspace(self.x0, self.xk_plus_1, 1000)
-                Y = self.h_function(X, *self.args)
-                plt.plot(X, Y, label='h(x)')
+                if plot_every_step:
+                    X = np.linspace(self.x0, self.xk_plus_1, 1000)
+                    Y = self.h_function(X, *self.args)
+                    plt.plot(X, Y, label='h(x)')
 
-                Tk_ext = np.array([self.x0])
-                Tk_ext = np.append(Tk_ext, self.Tk)
-                Tk_ext = np.append(Tk_ext, [self.xk_plus_1])
-                Y = self.h_function(Tk_ext, *self.args)
-                plt.scatter(Tk_ext, Y, label='Elemnts in Tk')
-                Uk, X = self.__compute_uk(Z)
-                # Uk = np.log(Sk)
-                plt.plot(X, Uk, label='Lines Uk')
-                Lk, X = self.__compute_lk()
-                plt.plot(X, Lk, label='Lines lk')
+                    Tk_ext = np.array([self.x0])
+                    Tk_ext = np.append(Tk_ext, self.Tk)
+                    Tk_ext = np.append(Tk_ext, [self.xk_plus_1])
+                    Y = self.h_function(Tk_ext, *self.args)
+                    plt.scatter(Tk_ext, Y, label='Elemnts in Tk')
+                    Uk, X = self.__compute_uk(Z)
+                    # Uk = np.log(Sk)
+                    plt.plot(X, Uk, label='Lines Uk')
+                    Lk, X = self.__compute_lk()
+                    plt.plot(X, Lk, label='Lines lk')
 
-                if len(x_samples) > 0:
-                    Y = []
-                    for x_samp in x_samples:
-                        y = self.__compute_uk_single_x(x_samp, Z)
-                        Y.append(y)
-                    plt.scatter(x_samples, Y, label='Samples')
+                    if len(x_samples) > 0:
+                        Y = []
+                        for x_samp in x_samples:
+                            y = self.__compute_uk_single_x(x_samp, Z)
+                            Y.append(y)
+                        plt.scatter(x_samples, Y, label='Samples')
 
-                plt.legend()
-                plt.show()
+                    plt.legend()
+                    plt.show()
+            except IndexError:
+                print "Index Error at sampling"
 
         if plot_every_step:
             X = np.linspace(self.x0, self.xk_plus_1, 1000)
@@ -292,58 +295,32 @@ class ARS:
         return -(X - mean) / (sigma ** 2)
 
 
-def h_log(log_beta, *args):
-    S = args[0]
-    w = args[1]
-    K = len(S)
-    value = -K * sc.special.gammaln(log_beta / 2.).real - 1. / (2 * log_beta) + (
-                K * log_beta - 3) / 2.  # * (np.log(log_beta/2))
-    S_times_w = S * w
-    value += log_beta / 2. * np.sum(np.log(S_times_w) - S_times_w)
-    return value
+def h_log(log_alpha, *args):
+    K = args[0]
+    N = args[1]
+    return np.log(K - 3. / 2) + np.log(np.abs(log_alpha)) - 1. / (2 * log_alpha) + sc.special.gammaln(
+        log_alpha) - sc.special.gammaln(N + log_alpha)
 
 
-def h_derivative(log_beta, *args):
-    S = args[0]
-    w = args[1]
-    K = len(S)
-    value = -K * sc.special.digamma(log_beta) - 1. / (2 * log_beta ** 2) + (K * log_beta - 3) / (2. * log_beta) + (
-                np.log(log_beta) - np.log(2)) * K / 2.
-    S_times_w = S * w
-    value += np.sum(np.log(S_times_w) - S_times_w) / 2.
-    return value
+def h_derivative(log_alpha, *args):
+    # K = args[0] # K is not used in the derivative
+    N = args[1]
+    return (2 * log_alpha - 1) / (2 * log_alpha ** 2) + sc.special.digamma(log_alpha) - sc.special.digamma(
+        N + log_alpha)
 
 def main():
-    means = [0, 10, 100]
-    sigma = [1, 2, 3]
+    mean = 100
+    sigma = 30
 
-    X = sc.stats.norm.rvs(loc=means[0], scale=sigma[0], size=500)
-    X = np.append(X, sc.stats.norm.rvs(loc=means[1], scale=sigma[1], size=500))
-    X = np.append(X, sc.stats.norm.rvs(loc=means[2], scale=sigma[2], size=500))
+    # X = np.log(np.linspace(0.0001, 10000, 10000))
 
-    sigma_y = np.std(X)
-    s = 1. / np.array(sigma)
-    w = sc.stats.gamma.rvs(1, sigma_y, size=1)[0]
-
-    X = np.linspace(0.00001, 0.9999999999, 1000)
-    Y = h_log(np.log(X), s, w)
-    plt.plot(X, Y)
-    plt.show()
-
-    X = np.linspace(1.0001, 1000, 1000)
-    Y = h_log(np.log(X), s, w)
-    plt.plot(X, Y)
-    plt.show()
-
-    h_log(500, s, 50)
-    mean = 0.
-    sigma = 100.
-    Tk = [-300, 470]
-    x0 = -800
-    xk_plus_1 = 800
+    Tk = [0.00001, 0.1]
+    x0 = 1e-70
+    xk_plus_1 = 1.6
 
     ars = ARS(Tk, x0, xk_plus_1, 100000, h_log, h_derivative, mean, sigma)
-    x_samples = ars.example_ARS_log_normal_to_x(mean, sigma, Tk, x0, xk_plus_1, 10000)
+    x_samples = ars.perform_ARS(1000)
+    #x_samples = ars.example_ARS_log_normal_to_x(mean, sigma, Tk, x0, xk_plus_1, 10000)
 
     # ars_Sampling = ARS(Tk, x0, xk_plus_1, 10000, h_log_normal, h_derivative_log_normal, mean, sigma)
     #x_samples = ars_Sampling.perform_ARS(10000)
@@ -351,14 +328,14 @@ def main():
     x_left = np.min(x_samples)
     x_right = np.max(x_samples)
     X = np.linspace(x_left, x_right, 1000)
-    Y = sc.stats.norm.pdf(X, loc=mean, scale=sigma)
+    Y = h_log(X, 4, 1000)
     plt.plot(X, Y)
     plt.hist(x_samples, bins='auto', normed=True, label='Samples generated by ARS')
 
     # plt.hist(x_samples, bins='auto', density=True)
 
-    print "mean: " + str(np.mean(x_samples))
-    print "sigma: " + str(np.std(x_samples))
+    # print "mean: " + str(np.mean(x_samples))
+    #print "sigma: " + str(np.std(x_samples))
     plt.show()
 
 
