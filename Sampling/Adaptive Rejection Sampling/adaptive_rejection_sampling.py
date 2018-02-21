@@ -350,8 +350,8 @@ def h_derivative_beta(log_beta, *args):
     S = args[0]
     w = args[1]
     K = len(S)
-    return -K * sc.special.digamma(log_beta / 2.) - 1. / (2 * (log_beta ** 2)) + K / 2. * (np.log(log_beta / 2.)) + (
-                K * log_beta - 3) / 2. * (1. / log_beta) + 1 / 2. * (np.sum(np.log(S * w) - S * w))
+    return -K * sc.special.digamma(log_beta / 2) / 2. + 1. / (2 * (log_beta ** 2)) + K / 2. * (np.log(log_beta / 2.)) + \
+           (K * log_beta - 3) / (2. * log_beta) + 1 / 2. * (np.sum(np.log(S * w) - S * w))
 
 
 def h_log_alpha(log_alpha, *args):
@@ -438,7 +438,8 @@ def main():
     plt.show()
     Tk = [0.001, 100]
     x0 = 0.0008
-    xk_plus_1 = 300
+    xk_plus_1 = 500
+
 
     X = np.linspace(x0, xk_plus_1, 1000)
     Y = h_log_beta(X, s, w)
@@ -457,6 +458,7 @@ def main():
     Y = (h_log_beta(xj, s, w)) + (X - xj) * h_derivative_beta(xj, s, w)
     plt.plot(X, Y, label='Uk from xk_plus_1')
 
+
     '''xj = x0
     Y = (h_log_beta(xj, s, w)) + (X - xj) * h_derivative_beta(xj, s, w)
     plt.plot(X, Y, label='Uk from x0')
@@ -470,11 +472,8 @@ def main():
     plt.plot(X, Y, label='Uk from x2')
     '''
 
-    plt.legend()
-    plt.show()
-
     # ars = ARS(Tk, x0, xk_plus_1, 100000, h_log_alpha, h_derivative_alpha, mean, sigma)
-    ars = ARS(Tk, x0, xk_plus_1, 1000000, h_log_beta, h_derivative_beta, s, w)
+    ars = ARS(Tk, x0, xk_plus_1, 100000, h_log_beta, h_derivative_beta, s, w)
     x_samples = ars.perform_ARS(10, True)
     #x_samples = ars.example_ARS_log_normal_to_x(mean, sigma, Tk, x0, xk_plus_1, 10000)
 
