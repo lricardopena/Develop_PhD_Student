@@ -452,6 +452,25 @@ def main():
     Uk, X = compute_uk(Tk, x0, xk_plus_1, 1000000, s, w)
     # Uk = np.log(Sk)
     plt.plot(X, Uk, label='Lines Uk')
+    X = np.linspace(0.008, 1000, 1000)
+    xj = 1
+    Y = (h_log_beta(xj, s, w)) + (X - xj) * h_derivative_beta(xj, s, w)
+    plt.plot(X, Y, label='Uk from xk_plus_1')
+
+    '''xj = x0
+    Y = (h_log_beta(xj, s, w)) + (X - xj) * h_derivative_beta(xj, s, w)
+    plt.plot(X, Y, label='Uk from x0')
+
+    xj = Tk[0]
+    Y = (h_log_beta(xj, s, w)) + (X - xj) * h_derivative_beta(xj, s, w)
+    plt.plot(X, Y, label='Uk from x1')
+
+    xj = Tk[1]
+    Y = (h_log_beta(xj, s, w)) + (X - xj) * h_derivative_beta(xj, s, w)
+    plt.plot(X, Y, label='Uk from x2')
+    '''
+
+    plt.legend()
     plt.show()
 
     # ars = ARS(Tk, x0, xk_plus_1, 100000, h_log_alpha, h_derivative_alpha, mean, sigma)
