@@ -350,7 +350,7 @@ def h_derivative_beta(log_beta, *args):
     S = args[0]
     w = args[1]
     K = len(S)
-    return -K * sc.special.psi(log_beta / 2.) - 1. / (2 * (log_beta ** 2)) + K / 2. * (np.log(log_beta / 2.)) + (
+    return -K * sc.special.digamma(log_beta / 2.) - 1. / (2 * (log_beta ** 2)) + K / 2. * (np.log(log_beta / 2.)) + (
                 K * log_beta - 3) / 2. * (1. / log_beta) + 1 / 2. * (np.sum(np.log(S * w) - S * w))
 
 
