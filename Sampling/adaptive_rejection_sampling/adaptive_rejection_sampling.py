@@ -30,6 +30,8 @@ class ARS:
         Z = []
         for j in range(-1, len(self.Tk)):
             zj = self.__compute_Zj(j)
+            if zj < self.x0:
+                zj = self.x0
             Z.append(zj)
         return Z
 
@@ -55,6 +57,8 @@ class ARS:
                      self.h_derivative_function(xj, *self.args) - self.h_derivative_function(xj_plus_1, *self.args))
         if zj > self.xk_plus_1:
             zj = self.xk_plus_1
+        if np.isnan(zj):
+            print("some")
         return zj
 
     def __compute_lk_single_x(self, x):
@@ -79,8 +83,7 @@ class ARS:
             xj_plus_1 = self.Tk[j]
 
         return ((xj_plus_1 - x) * self.h_function(xj, *self.args) + (x - xj) * self.h_function(xj_plus_1,
-                                                                                               *self.args)) / (
-                       xj_plus_1 - xj)
+                                                                                        *self.args)) / (xj_plus_1 - xj)
 
     def __compute_lk(self):
         '''
@@ -150,9 +153,13 @@ class ARS:
             else:  # finish xk_plus_1
                 xj = self.xk_plus_1
                 X = np.linspace(Z[j], self.xk_plus_1, self.number_of_elements_linespace)
+            if np.any(X < self.x0):
+                print("sime")
             Xk = np.append(Xk, X)
             Y = (self.h_function(xj, *self.args)) + (X - xj) * self.h_derivative_function(xj, *self.args)
             uk = np.append(uk, Y)
+
+        uk = np.nan_to_num(uk)
 
         return uk, Xk
 
@@ -175,6 +182,11 @@ class ARS:
         indexXj = np.where(cumulative_sk >= u)[0][0]
 
         x = Xk[indexXj]
+        if x <= self.x0:
+            indexXj = np.where(cumulative_sk >= u)[0]
+            Xk_ = Xk[indexXj]
+            indexXj = np.where(Xk_ > self.x0)[0]
+            x = Xk_[indexXj][0]
         if plot_every_step:
             plt.plot(Xk, cumulative_sk, label='Cumulate')
             plt.plot([Xk[0], x, x], [u, u, 0], label='x sampled: ' + str(np.round(x, 3)))
@@ -184,6 +196,7 @@ class ARS:
             plt.scatter(self.Tk, Y, label='Elements in Tk')
             plt.legend()
             plt.show()
+
         return x
 
     def __sample_from_uk(self, Uk, Xk, plot_every_step):
@@ -200,6 +213,9 @@ class ARS:
         indexXj = np.where(cumulative_Uk >= u)[0][0]
 
         x = Xk[indexXj]
+        if x < self.x0:
+            indexXj = np.where(cumulative_Uk >= u)[0]
+
         if plot_every_step:
             plt.plot(Xk, cumulative_Uk, label='Cumulate')
             plt.plot([Xk[0], x, x], [u, u, 0], label='x sampled: ' + str(np.round(x, 3)))
@@ -209,6 +225,7 @@ class ARS:
             plt.scatter(self.Tk, Y, label='Elements in Tk')
             plt.legend()
             plt.show()
+
         return x
 
     def __compute_sk(self, Zk):
@@ -231,7 +248,7 @@ class ARS:
         Z = self.__compute_all_Zj()
         Sk, Xk = self.__compute_sk(Z)
         use_Sk_for_Sampling = True
-        if np.isinf(np.sum(Sk)):
+        if np.isinf(np.sum(Sk)) or np.sum(Sk) == 0.0:
             Uk, Xk = self.__compute_uk(Z)
             use_Sk_for_Sampling = False
 
@@ -242,48 +259,51 @@ class ARS:
                 else:
                     x_proposal = self.__sample_from_uk(Uk, Xk, plot_every_step)
 
-                lk_x_proposal = self.__compute_lk_single_x(x_proposal)
-                uk_x_proposal = self.__compute_uk_single_x(x_proposal, Z)
+                if x_proposal == self.x0:
+                    print("error")
+                if x_proposal >= self.x0:
+                    lk_x_proposal = self.__compute_lk_single_x(x_proposal)
+                    uk_x_proposal = self.__compute_uk_single_x(x_proposal, Z)
 
-                p = np.exp(lk_x_proposal - uk_x_proposal)
-                w = np.random.uniform()
-                if p > w:
-                    x_samples.append(x_proposal)
-                else:
-                    self.Tk.append(x_proposal)
-                    self.Tk = sorted(self.Tk)
-                    Z = self.__compute_all_Zj()
-                    Sk, Xk = self.__compute_sk(Z)
-                    use_Sk_for_Sampling = True
-                    if np.isinf(np.sum(Sk)):
-                        Uk, Xk = self.__compute_uk(Z)
-                        use_Sk_for_Sampling = False
+                    p = np.exp(lk_x_proposal - uk_x_proposal)
+                    w = np.random.uniform()
+                    if p > w:
+                        x_samples.append(x_proposal)
+                    elif not(x_proposal in self.Tk):
+                        self.Tk.append(x_proposal)
+                        self.Tk = sorted(self.Tk)
+                        Z = self.__compute_all_Zj()
+                        Sk, Xk = self.__compute_sk(Z)
+                        use_Sk_for_Sampling = True
+                        if np.isinf(np.sum(Sk)) or np.sum(Sk) == 0.0:
+                            Uk, Xk = self.__compute_uk(Z)
+                            use_Sk_for_Sampling = False
 
-                if plot_every_step:
-                    X = np.linspace(self.x0, self.xk_plus_1, 1000)
-                    Y = self.h_function(X, *self.args)
-                    plt.plot(X, Y, label='h(x)')
+                    if plot_every_step:
+                        X = np.linspace(self.x0, self.xk_plus_1, 1000)
+                        Y = self.h_function(X, *self.args)
+                        plt.plot(X, Y, label='h(x)')
 
-                    Tk_ext = np.array([self.x0])
-                    Tk_ext = np.append(Tk_ext, self.Tk)
-                    Tk_ext = np.append(Tk_ext, [self.xk_plus_1])
-                    Y = self.h_function(Tk_ext, *self.args)
-                    plt.scatter(Tk_ext, Y, label='Elemnts in Tk')
-                    Uk, X = self.__compute_uk(Z)
-                    # Uk = np.log(Sk)
-                    plt.plot(X, Uk, label='Lines Uk')
-                    Lk, X = self.__compute_lk()
-                    plt.plot(X, Lk, label='Lines lk')
+                        Tk_ext = np.array([self.x0])
+                        Tk_ext = np.append(Tk_ext, self.Tk)
+                        Tk_ext = np.append(Tk_ext, [self.xk_plus_1])
+                        Y = self.h_function(Tk_ext, *self.args)
+                        plt.scatter(Tk_ext, Y, label='Elemnts in Tk')
+                        Uk, X = self.__compute_uk(Z)
+                        # Uk = np.log(Sk)
+                        plt.plot(X, Uk, label='Lines Uk')
+                        Lk, X = self.__compute_lk()
+                        plt.plot(X, Lk, label='Lines lk')
 
-                    if len(x_samples) > 0:
-                        Y = []
-                        for x_samp in x_samples:
-                            y = self.__compute_uk_single_x(x_samp, Z)
-                            Y.append(y)
-                        plt.scatter(x_samples, Y, label='Samples')
+                        if len(x_samples) > 0:
+                            Y = []
+                            for x_samp in x_samples:
+                                y = self.__compute_uk_single_x(x_samp, Z)
+                                Y.append(y)
+                            plt.scatter(x_samples, Y, label='Samples')
 
-                    plt.legend()
-                    plt.show()
+                        plt.legend()
+                        plt.show()
             except IndexError:
                 print "Index Error at sampling"
 
@@ -338,34 +358,23 @@ class ARS:
         return -(X - mean) / (sigma ** 2)
 
 
-def h_log_beta(log_beta, *args):
-    S = args[0]
-    w = args[1]
-    K = len(S)
-    return -K * sc.special.gammaln(log_beta / 2.) - 1. / (2 * log_beta) + (K * log_beta - 3) / 2. * (
-        np.log(log_beta / 2.)) + log_beta / 2. * (np.sum(np.log(S * w) - S * w))
-
-
-def h_derivative_beta(log_beta, *args):
-    S = args[0]
-    w = args[1]
-    K = len(S)
-    return -K * sc.special.digamma(log_beta / 2) / 2. + 1. / (2 * (log_beta ** 2)) + K / 2. * (np.log(log_beta / 2.)) + \
-           (K * log_beta - 3) / (2. * log_beta) + 1 / 2. * (np.sum(np.log(S * w) - S * w))
-
-
 def h_log_alpha(log_alpha, *args):
     K = args[0]
     N = args[1]
-    return np.log(K - 3. / 2) + np.log(np.abs(log_alpha)) - 1. / (2 * log_alpha) + sc.special.gammaln(
-        log_alpha) - sc.special.gammaln(N + log_alpha)
+    sum = 0
+    for i in range(N):
+        sum += np.log(N + log_alpha - i)
+    return (K - 3. / 2) * np.log(log_alpha) - 1 / (2 * log_alpha)  - sum
 
 
 def h_derivative_alpha(log_alpha, *args):
-    # K = args[0] # K is not used in the derivative
+    K = args[0]
     N = args[1]
-    return (2 * log_alpha - 1) / (2 * log_alpha ** 2) + sc.special.digamma(log_alpha) - sc.special.digamma(
-        N + log_alpha)
+    sum = 0
+    for i in range(N):
+        sum += 1. / (N + log_alpha - i)
+
+    return (K - 3. / 2) / log_alpha + 1. / (2 * log_alpha ** 2) + sum
 
 
 def compute_Zj(x0, xk_plus_1, Tk, j, *args):
@@ -384,9 +393,12 @@ def compute_Zj(x0, xk_plus_1, Tk, j, *args):
         xj = Tk[j]
         xj_plus_1 = xk_plus_1
 
-    zj = (h_log_beta(xj_plus_1, *args) - h_log_beta(xj, *args) - xj_plus_1 * h_derivative_beta(xj_plus_1,
-                                                                                               *args) + xj * h_derivative_beta(
-        xj, *args)) / (h_derivative_beta(xj, *args) - h_derivative_beta(xj_plus_1, *args))
+    zj = (h_log_alpha(xj_plus_1, *args) - h_log_alpha(xj, *args) - xj_plus_1 * h_derivative_alpha(xj_plus_1,
+                                                                                               *args) + xj * h_derivative_alpha(
+        xj, *args)) / (h_derivative_alpha(xj, *args) - h_derivative_alpha(xj_plus_1, *args))
+    #zj = (h_log_beta(xj_plus_1, *args) - h_log_beta(xj, *args) - xj_plus_1 * h_derivative_beta(xj_plus_1,
+    #                                                                                           *args) + xj * h_derivative_beta(
+    #    xj, *args)) / (h_derivative_beta(xj, *args) - h_derivative_beta(xj_plus_1, *args))
 
     # if zj > xk_plus_1:
     # zj = xk_plus_1
@@ -418,29 +430,39 @@ def compute_uk(Tk, x0, xk_plus_1, number_of_elements_linespace, *args):
             xj = xk_plus_1
             X = np.linspace(Z[j], xk_plus_1, number_of_elements_linespace)
         Xk = np.append(Xk, X)
-        Y = (h_log_beta(xj, *args)) + (X - xj) * h_derivative_beta(xj, *args)
-        # Y = (h_function(xj, *self.args)) + (X - xj) * h_derivative_function(xj, *self.args)
+        Y = (h_log_alpha(xj, *args)) + (X - xj) * h_derivative_alpha(xj, *args)
+        #Y = (h_log_beta(xj, *args)) + (X - xj) * h_derivative_beta(xj, *args)
         uk = np.append(uk, Y)
 
     return uk, Xk
 
 
+def h_log_beta(log_beta, *args):
+    S = args[0]
+    w = args[1]
+    K = len(S)
+    return -K * sc.special.gammaln(log_beta / 2.) - 1. / (2 * log_beta) + (K * log_beta - 3) / 2. * (
+            np.log(log_beta / 2.)) + log_beta / 2. * (np.sum(np.log(S * w) - S * w))
+
+def h_derivative_beta(log_beta, *args):
+    S = args[0]
+    w = args[1]
+    K = len(S)
+    return -K * sc.special.digamma(log_beta / 2) / 2. + 1. / (2 * (log_beta ** 2)) + K / 2. * (
+            np.log(log_beta / 2.)) + \
+               (K * log_beta - 3) / (2. * log_beta) + 1 / 2. * (np.sum(np.log(S * w) - S * w))
+
 def main():
+    s = 1./np.array([10, 4, 6])
+    w = sc.random.gamma(shape=1, scale=100, size=1)[0]
+    N = 150
+    K = 5
 
-    mean = 100
-    sigma = 30
-
-    X = np.linspace(0.0008, 400, 1000000)
-    w = sc.random.gamma(1, 30)
-    s = 1. / np.array([3, 6, 2])
-    Y = h_log_beta(X, s, w)
-    plt.plot(X, Y)
-    plt.show()
     Tk = [0.001, 100]
-    x0 = 0.0008
-    xk_plus_1 = 500
+    x0 = 1e-70
+    xk_plus_1 = 500000
 
-
+    '''
     X = np.linspace(x0, xk_plus_1, 1000)
     Y = h_log_beta(X, s, w)
     plt.plot(X, Y, label='h(x)')
@@ -450,13 +472,38 @@ def main():
     Tk_ext = np.append(Tk_ext, [xk_plus_1])
     Y = h_log_beta(Tk_ext, s, w)
     plt.scatter(Tk_ext, Y, label='Elemnts in Tk')
-    Uk, X = compute_uk(Tk, x0, xk_plus_1, 1000000, s, w)
+    Uk, X = compute_uk(Tk, x0, xk_plus_1, 10000, s, w)
     # Uk = np.log(Sk)
     plt.plot(X, Uk, label='Lines Uk')
     X = np.linspace(0.008, 1000, 1000)
-    xj = 1
+    xj = xk_plus_1
     Y = (h_log_beta(xj, s, w)) + (X - xj) * h_derivative_beta(xj, s, w)
-    plt.plot(X, Y, label='Uk from xk_plus_1')
+
+    plt.plot(X, Y, label='Line cover all h(x)')
+    plt.legend()
+    plt.show()'''
+
+
+    X = np.linspace(x0, xk_plus_1, 1000)
+    Y = h_log_alpha(X, K, N)
+    plt.plot(X, Y, label='h(x)')
+
+    Tk_ext = np.array([x0])
+    Tk_ext = np.append(Tk_ext, Tk)
+    Tk_ext = np.append(Tk_ext, [xk_plus_1])
+    Y = h_log_alpha(Tk_ext, K,N)
+    plt.scatter(Tk_ext, Y, label='Elemnts in Tk')
+    Uk, X = compute_uk(Tk, x0, xk_plus_1, 10000, K, N)
+
+    # Uk = np.log(Sk)
+    plt.plot(X, Uk, label='Lines Uk')
+    X = np.linspace(0.008, 1000, 1000)
+    xj = xk_plus_1
+    Y = (h_log_alpha(xj, K, N)) + (X - xj) * h_derivative_alpha(xj, K, N)
+
+    plt.plot(X, Y, label='Line cover all h(x)')
+    plt.legend()
+    plt.show()
 
 
     '''xj = x0
@@ -473,25 +520,12 @@ def main():
     '''
 
     # ars = ARS(Tk, x0, xk_plus_1, 100000, h_log_alpha, h_derivative_alpha, mean, sigma)
-    ars = ARS(Tk, x0, xk_plus_1, 100000, h_log_beta, h_derivative_beta, s, w)
-    x_samples = ars.perform_ARS(10, True)
+    ars = ARS(Tk, x0, xk_plus_1, 100000, h_log_alpha, h_derivative_alpha, K, N)
+    x_samples = ars.perform_ARS(10, False)
     #x_samples = ars.example_ARS_log_normal_to_x(mean, sigma, Tk, x0, xk_plus_1, 10000)
 
     # ars_Sampling = ARS(Tk, x0, xk_plus_1, 10000, h_log_normal, h_derivative_log_normal, mean, sigma)
     #x_samples = ars_Sampling.perform_ARS(10000)
-
-    x_left = np.min(x_samples)
-    x_right = np.max(x_samples)
-    X = np.linspace(x_left, x_right, 1000)
-    Y = h_log(X, 4, 1000)
-    plt.plot(X, Y)
-    plt.hist(x_samples, bins='auto', normed=True, label='Samples generated by ARS')
-
-    # plt.hist(x_samples, bins='auto', density=True)
-
-    # print "mean: " + str(np.mean(x_samples))
-    #print "sigma: " + str(np.std(x_samples))
-    plt.show()
 
 
 if __name__ == "__main__":

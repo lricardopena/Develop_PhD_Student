@@ -8,6 +8,7 @@ import random
 import numpy as np
 import scipy as sc
 import scipy.special
+import scipy.stats
 
 import Sampling as sampling_package
 import Sampling.adaptive_rejection_sampling
@@ -16,13 +17,30 @@ import Sampling.adaptive_rejection_sampling
 class infinite_GMM:
     def __init__(self, X, initialZ=None, initial_number_class=np.random.randint(2, 14, size=1)[0]):
         self.X = X
-        self.mean_sample = X.mean()
-        self.variance_sample = np.mean(abs(X - X.mean()) ** 2)[0]
-        self.lambda_prior = sc.random.normal(loc=self.mean_sample, scale=self.variance_sample, size=1)[0]
-        self.r_prior = sc.random.gamma(shape=1, scale=1. / self.variance_sample, size=1)[0]
-        self.beta = 1. / sc.random.gamma(shape=1, scale=1, size=1)[0]
-        self.w = sc.random.gamma(shape=1, scale=self.variance_sample, size=1)[0]
+        self.oneDimension = (len(X.shape) == 1)
+
         self.alpha = 1. / sc.random.gamma(shape=1, scale=1, size=1)[0]
+        self.beta = 1. / sc.random.gamma(shape=1, scale=1, size=1)[0]
+
+        if self.oneDimension:
+            self.D = 1
+            self.mean_sample = X.mean()
+            self.variance_sample = float(np.mean(abs(X - X.mean()) ** 2))
+            self.lambda_prior = sc.random.normal(loc=self.mean_sample, scale=self.variance_sample, size=1)[0]
+            self.r_prior = sc.random.gamma(shape=1, scale=1. / self.variance_sample, size=1)[0]
+            self.w = sc.random.gamma(shape=1, scale=self.variance_sample, size=1)[0]
+        else:
+            self.D = X.shape[1]
+            self.mean_sample = X.mean(axis=0)
+            self.inverse_variance_sample = np.linalg.inv(self.variance_sample)
+            N = len(X)
+            self.variance_sample = np.cov(X) # it works?
+            self.lambda_prior = sc.random.multivariate_normal(mean=self.mean_sample, cov=self.variance_sample, size=1)
+            self.r_prior = sc.stats.wishart.rvs(N-1, self.inverse_variance_sample, size=1)
+            self.w = sc.stats.wishart.rvs(N-1, self.variance_sample, size=1)
+
+
+
         self.means = []
         self.S = []
         if initialZ is None:
@@ -32,10 +50,17 @@ class infinite_GMM:
 
         for k in range(len(np.unique(self.Z))):
             Xk = self.X[np.where(self.Z == k)]
-            meank = Xk.mean()
-            sigmak = np.mean(abs(Xk - Xk.mean()) ** 2)[0]
+
+
+            if self.oneDimension:
+                meank = Xk.mean()
+                sigmak = np.mean(abs(Xk - Xk.mean()) ** 2)
+                self.S.append(1. / sigmak)
+            else:
+                meank = Xk.mean(axis=0)
+                self.S.append(np.linalg.inv(np.cov(Xk))) #it works?
             self.means.append(meank)
-            self.S.append(1. / sigmak)
+
         self.means = np.array(self.means)
         self.S = np.array(self.S)
 
@@ -60,17 +85,20 @@ class infinite_GMM:
     def __h_log_alpha(log_alpha, *args):
         K = args[0]
         N = args[1]
-        return np.log(K - 3. / 2) + np.log(np.abs(log_alpha)) - 1. / (2 * log_alpha) + sc.special.gammaln(
-            log_alpha) - sc.special.gammaln(N + log_alpha)
+        return (K - 3./2) * np.log(log_alpha) - 1/(2*log_alpha) + sc.special.gammaln(log_alpha) - sc.special.gammaln(N + log_alpha)
 
     @staticmethod
     def __h_derivative_alpha(log_alpha, *args):
-        # K = args[0] # K is not used in the derivative
+        K = args[0]
         N = args[1]
-        return (2 * log_alpha - 1) / (2 * log_alpha ** 2) + sc.special.digamma(log_alpha) - sc.special.digamma(
-            N + log_alpha)
+        sum = 0
+        for i in range(N):
+            sum += 1./(N+log_alpha-i)
 
-    def __sample_means_precision(self):
+        return (K - 3./2)/log_alpha + 1./(2*log_alpha**2) + sum
+
+
+    def __sample_means_precision_1_dimension(self):
         K = len(self.means)
         new_means = []
         new_S = []
@@ -79,11 +107,17 @@ class infinite_GMM:
             # sampling muk
             Xk = self.X[np.where(self.Z == k)]
             meank = Xk.mean()
-            sk = 1. / np.mean(abs(Xk - Xk.mean()) ** 2)[0]
+            if len(Xk) > 1:
+                sk = 1. / np.mean(abs(Xk - Xk.mean()) ** 2)
+            else:
+                sk = 0.001
             Nk = len(Xk)
             mean_value = (meank * Nk * sk + self.lambda_prior * self.r_prior) / (Nk * sk + self.r_prior)
             sigma_value = 1. / (Nk * sk + self.r_prior)
-            meank = np.random.normal(loc=mean_value, scale=sigma_value, size=1)[0]
+            try:
+                meank = np.random.normal(loc=mean_value, scale=sigma_value, size=1)[0]
+            except ValueError:
+                print("some")
             new_means.append(meank)
 
             # sampling sk
@@ -94,39 +128,97 @@ class infinite_GMM:
         self.means = np.array(new_means)
         self.S = np.array(new_S)
 
+
+    def __sample_means_precision(self):
+        if self.oneDimension:
+            self.__sample_means_precision_1_dimension()
+        else:
+            K = len(self.means)
+            new_means = []
+            new_S = []
+
+            for k in range(K):
+                # sampling muk
+                Xk = self.X[np.where(self.Z == k)]
+                meank = Xk.mean(axis=0)
+                if len(Xk) > 1:
+                    sk = np.cov(Xk) #it works?
+                else:
+                    sk = 0.001 * np.identity(self.D)
+                Nk = len(Xk)
+                mean_value = (Nk*meank.dot(sk) + self.lambda_prior.dot( self.r_prior)) *  np.linalg.inv( Nk * sk + self.r_prior)
+                sigma_value = np.linalg.inv(Nk*sk + self.r_prior)
+                try:
+                    meank = sc.stats.multivariate_normal.rvs(mean=mean_value, cov=sigma_value, size=1)
+                except ValueError:
+                    print("some")
+                new_means.append(meank)
+
+                # sampling sk
+                shape_parameter = self.beta + Nk
+                scale_paremeter = np.linalg.inv((1. / (self.beta + Nk)) * (self.beta * self.w + np.sum((Xk - meank) ** 2))) #not sure if it works
+                new_S.append(sc.stats.wishart.rvs(shape_parameter, scale_paremeter, size=1))
+
+            self.means = np.array(new_means)
+            self.S = np.array(new_S)
+
+
     def __sample_lambda_r_priors(self):
         K = len(self.means)
-        mean_value_lambda = (self.mean_sample * (1. / self.variance_sample) + self.r_prior * np.sum(self.means)) / (
-                    1. / self.variance_sample + K * self.r_prior)
-        variance_value_lambda = 1. / ((1. / self.variance_sample) + K * self.r_prior)
-        self.lambda_prior = sc.random.normal(loc=mean_value_lambda, scale=variance_value_lambda, size=1)[0]
+        if self.oneDimension:
+            mean_value_lambda = (self.mean_sample * (1. / self.variance_sample) + self.r_prior * np.sum(self.means)) / (
+                        1. / self.variance_sample + K * self.r_prior)
+            variance_value_lambda = 1. / ((1. / self.variance_sample) + K * self.r_prior)
+            self.lambda_prior = sc.random.normal(loc=mean_value_lambda, scale=variance_value_lambda, size=1)[0]
 
-        shape_value_r = K + 1
-        scale_value_r = 1. / (1. / (K + 1) * (self.variance_sample + np.sum(self.means - self.lambda_prior) ** 2))
-        self.r_prior = sc.random.gamma(shape=shape_value_r, scale=scale_value_r, size=1)[0]
+            shape_value_r = K + 1
+            scale_value_r = 1. / (1. / (K + 1) * (self.variance_sample + np.sum(self.means - self.lambda_prior) ** 2))
+            self.r_prior = sc.random.gamma(shape=shape_value_r, scale=scale_value_r, size=1)[0]
+        else:
+            mean_value_lambda = (self.mean_sample.dot(self.inverse_variance_sample) + self.r_prior.dot(
+                np.sum(self.means, axis=0)) ).dot(np.linalg.inv(self.inverse_variance_sample + K*self.r_prior))
+            variance_value_lambda = np.linalg.inv(self.inverse_variance_sample + K*self.r_prior)
+            self.lambda_prior = sc.stats.multivariate_normal(mean=mean_value_lambda, cov=variance_value_lambda, size=1)
+
+            shape_value_r = K + 1
+            scale_value_r =  np.linalg.inv((1. / (K + 1)*(self.variance_sample + np.sum(self.means - self.lambda_prior, axis=0))))
+
+            self.r_prior = sc.stats.wishart.rvs(shape_value_r, scale_value_r, size=1)
 
     def __sample_w_beta_priors(self):
-        K = len(self.means)
-        shape_value = K * self.beta + 1
-        scale_value = 1. / (1. / (K * self.beta + 1) * (1. / self.variance_sample + self.beta * np.sum(self.S)))
 
-        self.w = sc.random.gamma(shape=shape_value, scale=scale_value, size=1)[0]
+        K = len(self.means)
+        if self.oneDimension:
+            shape_value = K * self.beta + 1
+            scale_value = 1. / (1. / (K * self.beta + 1) * (1. / self.variance_sample + self.beta * np.sum(self.S)))
+
+            if scale_value <= 0:
+                print("error")
+
+            self.w = sc.random.gamma(shape=shape_value, scale=scale_value, size=1)[0]
+        else:
+            shape_value = K * self.beta + 1
+            # np.sum(self.S, axis=0) == suma de matrices?
+            scale_value = np.linalg.inv(1. / (K * self.beta + 1) * (self.inverse_variance_sample + self.beta * np.sum(self.S, axis=0)))
+
+            self.w = sc.random.gamma(shape=shape_value, scale=scale_value, size=1)[0]
 
         Tk = [0.001, 100]
-        x0 = 0.0008
+        x0 = 0.0000000000008
         xk_plus_1 = 500
 
         ars = sampling_package.adaptive_rejection_sampling.ARS(Tk, x0, xk_plus_1, 10000, self.__h_log_beta,
                                                                self.__h_derivative_beta, self.S, self.w)
 
-        numbres_beta_sampling = 100
+        numbres_beta_sampling = 10
         beta_samplings = ars.perform_ARS(numbres_beta_sampling, False)
-
+        beta_samplings = np.exp(beta_samplings)
         self.beta = beta_samplings[np.random.randint(0, numbres_beta_sampling, size=1)[0]]
 
-    def __sample_Z(self):
+    def __sample_Z_1_dimension(self):
         N = len(self.X)
-        order_sampling_Z = random.shuffle(range(len(self.Z)))
+        order_sampling_Z = range(len(self.Z))
+        random.shuffle(order_sampling_Z)
         # shuffle the index to more fastest converge
         for i in order_sampling_Z:
             K = len(self.means)
@@ -138,31 +230,30 @@ class infinite_GMM:
                     Nk -= 1
 
                 if Nk > 0:
-                    prob = float(Nk) / (N - 1 + self.alpha) * np.sqrt(self.S[k]) * np.exp(
-                        -self.S[k] * (self.X[i] - self.means[k]) ** 2 / 2.)
+                    prob = np.log(float(Nk)) - np.log(N - 1 + self.alpha) + 1./2*np.log(self.S[k]) - (self.S[k]*(self.X[i] - self.means[k])**2)/2.
                 else:
-                    sk = sc.random.normal(loc=self.lambda_prior, scale=1. / self.r_prior, size=1)[0]
-                    meank = sc.random.gamma(shape=self.beta, scale=self.w, size=1)[0]
+                    meank = sc.random.normal(loc=self.lambda_prior, scale=1. / self.r_prior, size=1)[0]
+                    sk = sc.random.gamma(shape=self.beta, scale=self.w, size=1)[0]
 
                     new_means_precision[k] = [meank, sk]
-                    prob = float(1) / (N - 1 + self.alpha) * np.sqrt(sk) * np.exp(
-                        -sk * (self.X[i] - meank) ** 2 / 2.)
+                    prob = - np.log(N - 1 + self.alpha) + 1./2*np.log(sk) - (sk*(self.X[i] - meank)**2)/2.
 
                 probability_of_belongs_class.append(prob)
-            sk = sc.random.normal(loc=self.lambda_prior, scale=1. / self.r_prior, size=1)[0]
-            meank = sc.random.gamma(shape=self.beta, scale=self.w, size=1)[0]
+            meank = sc.random.normal(loc=self.lambda_prior, scale=1. / self.r_prior, size=1)[0]
+            sk = sc.random.gamma(shape=self.beta, scale=self.w, size=1)[0]
 
             new_means_precision[K] = [meank, sk]
-            prob = float(1) / (N - 1 + self.alpha) * np.sqrt(sk) * np.exp(
-                -sk * (self.X[i] - meank) ** 2 / 2.)
+            prob = - np.log(N - 1 + self.alpha) + 1./2*np.log(sk) - (sk*(self.X[i] - meank)**2)/2.
             probability_of_belongs_class.append(prob)
-
-            probability_of_belongs_class = np.array(probability_of_belongs_class) / np.sum(probability_of_belongs_class)
+            if np.sum(np.exp(probability_of_belongs_class)) > 0:
+                probability_of_belongs_class = np.exp(probability_of_belongs_class)
+            else:
+                probability_of_belongs_class -= np.min(probability_of_belongs_class)
+            probability_of_belongs_class = np.cumsum(
+                np.array(probability_of_belongs_class) / np.sum(probability_of_belongs_class))
 
             u = np.random.uniform(size=1)[0]
-            actualProb = 0
-            for k, p in enumerate(probability_of_belongs_class):
-                actualProb += p
+            for k, actualProb in enumerate(probability_of_belongs_class):
                 if actualProb >= u:
                     if k in new_means_precision:  # If is a new mean an precision.
                         if k < K:
@@ -174,24 +265,90 @@ class infinite_GMM:
                     self.Z[i] = k
                     break
 
+    def __sample_Z(self):
+        if self.oneDimension:
+            self.__sample_Z_1_dimension()
+        else:
+            N = len(self.X)
+            order_sampling_Z = range(len(self.Z))
+            random.shuffle(order_sampling_Z)
+            r_prior_inverse = np.linalg.inv(self.r_prior)
+            # shuffle the index to more fastest converge
+            for i in order_sampling_Z:
+                K = len(self.means)
+                new_means_precision = {}
+                probability_of_belongs_class = []
+                for k in range(K):
+                    Nk = len(np.where(self.Z == k)[0])
+                    if self.Z[i] == k:
+                        Nk -= 1
+
+                    if Nk > 0:
+                        prob = np.log(float(Nk)) - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(self.X[i], mean=self.means[k], cov=np.linalg.inv(self.S[k]))
+                    else:
+                        meank = sc.stats.multivariate_normal.rvs(self.lambda_prior, r_prior_inverse, size=1)
+                        sk = sc.stats.wishart.rvs(self.beta, self.w, size=1)
+
+                        new_means_precision[k] = [meank, sk]
+                        prob = - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(self.X[i], meank, cov=np.linalg.inv(sk))
+
+                    probability_of_belongs_class.append(prob)
+                meank = sc.stats.multivariate_normal.rvs(self.lambda_prior, r_prior_inverse, size=1)
+                sk = sc.stats.wishart.rvs(self.beta, self.w, size=1)
+
+                new_means_precision[K] = [meank, sk]
+                prob = - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(self.X[i], meank, cov=np.linalg.inv(sk))
+                probability_of_belongs_class.append(prob)
+                if np.sum(np.exp(probability_of_belongs_class)) > 0:
+                    probability_of_belongs_class = np.exp(probability_of_belongs_class)
+                else:
+                    probability_of_belongs_class -= np.min(probability_of_belongs_class)
+                probability_of_belongs_class = np.cumsum(
+                    np.array(probability_of_belongs_class) / np.sum(probability_of_belongs_class))
+
+                u = np.random.uniform(size=1)[0]
+                for k, actualProb in enumerate(probability_of_belongs_class):
+                    if actualProb >= u:
+                        if k in new_means_precision:  # If is a new mean an precision.
+                            if k < K:
+                                self.means[k] = new_means_precision[k][0]
+                                self.S[k] = new_means_precision[k][1]
+                            else:
+                                self.means = np.append(self.means, new_means_precision[k][0])
+                                self.S = np.append(self.S, new_means_precision[k][1])
+                        self.Z[i] = k
+                        break
+
         if len(self.means) != len(np.unique(self.Z)):
-            print "Error"
+            k = 0
+            while k < len(self.means):
+                if len(np.where(self.Z == k)[0]) <= 0:
+                    self.means = np.delete(self.means, k)
+                    self.S = np.delete(self.S, k)
+                    self.Z[np.where(self.Z > k)[0]] -= 1
+                else:
+                    k += 1
 
     def __sample_alpha(self):
-        N = len(self.X)
-        K = len(self.means)
 
-        Tk = [0.001, 100]
-        x0 = 0.0008
-        xk_plus_1 = 500
+        if False:
+            N = len(self.X)
+            K = len(self.means)
 
-        ars = sampling_package.adaptive_rejection_sampling.ARS(Tk, x0, xk_plus_1, 10000, self.__h_log_alpha,
-                                                               self.__h_derivative_alpha, K, N)
+            if K < 2:
+                print("error")
 
-        numbres_alpha_sampling = 100
-        alpha_sampling = ars.perform_ARS(numbres_alpha_sampling, False)
+            Tk = [0.001, 100]
+            x0 = 1e-70
+            xk_plus_1 = 500
 
-        self.alpha = alpha_sampling[np.random.randint(0, numbres_alpha_sampling, size=1)[0]]
+            ars = sampling_package.adaptive_rejection_sampling.ARS(Tk, x0, xk_plus_1, 10000, self.__h_log_alpha,
+                                                                   self.__h_derivative_alpha, K, N)
+
+            numbers_alpha_sampling = 100
+            alpha_sampling = ars.perform_ARS(numbers_alpha_sampling, True)
+
+            self.alpha = alpha_sampling[np.random.randint(0, numbers_alpha_sampling, size=1)[0]]
 
     def learn_GMM(self, number_of_loops):
         for i in range(number_of_loops):
@@ -200,3 +357,5 @@ class infinite_GMM:
             self.__sample_w_beta_priors()
             self.__sample_Z()
             self.__sample_alpha()
+            if len(self.S) < 2:
+                print("error")
