@@ -13,7 +13,6 @@ import scipy.stats
 import Sampling as sampling_package
 import Sampling.adaptive_rejection_sampling
 from sklearn.cluster import KMeans
-import printGMM
 
 
 class infinite_GMM:
@@ -48,7 +47,6 @@ class infinite_GMM:
             self.r_prior = sc.stats.wishart.rvs(N-1, self.inverse_variance_sample, size=1)
             self.w = sc.stats.wishart.rvs(N-1, self.variance_sample, size=1)
             if initialZ is None:
-                #self.Z = np.random.randint(0, initial_number_class, size=len(X))
                 kmeans = KMeans(n_clusters=initial_number_class).fit(X)
                 self.Z = np.array(kmeans.labels_)
             else:
@@ -58,7 +56,6 @@ class infinite_GMM:
         self.S = []
         for k in range(len(np.unique(self.Z))):
             Xk = self.X[np.where(self.Z == k)]
-
 
             if self.oneDimension:
                 meank = Xk.mean()
@@ -75,11 +72,6 @@ class infinite_GMM:
     @staticmethod
     def __sample_scaled_inverse_chi_square(scale, shape):
         return sc.stats.invgamma.rvs(a=scale/2., scale=scale*shape/2., size=1)[0]
-
-    @staticmethod
-    def __sample_generalized_scaled_inverse_chi_square(scale, shape):
-        return sc.stats.invgamma.rvs(a=scale / 2., scale=scale * shape / 2., size=1)
-        #return sc.stats.invgamma.rvs(a=scale / 2., scale=scale * shape / 2., size=1)
 
     @staticmethod
     def __h_log_beta(log_beta, *args):
@@ -130,6 +122,9 @@ class infinite_GMM:
 
         return pik
 
+    def get_variance_1d(self):
+        return np.sqrt(1./self.S)
+
     def __sample_means_precision_1_dimension(self):
         K = len(self.means)
         new_means = []
@@ -140,10 +135,6 @@ class infinite_GMM:
             Xk = self.X[np.where(self.Z == k)]
             meank = Xk.mean()
             sk = self.S[k]
-            # if len(Xk) > 1:
-            #     sk = 1. / np.mean(abs(Xk - meank) ** 2)
-            # else:
-            #     sk = 0.001
             Nk = len(Xk)
             mean_value = (meank * Nk * sk + self.lambda_prior * self.r_prior) / (Nk * sk + self.r_prior)
             sigma_value = 1. / (Nk * sk + self.r_prior)
@@ -176,10 +167,6 @@ class infinite_GMM:
                 Xk = self.X[np.where(self.Z == k)]
                 meank = Xk.mean(axis=0)
                 sk = self.S[k]
-                # if len(Xk) > 1:
-                #     sk = np.cov(Xk.T, bias=False)
-                # else:
-                #     sk = 0.001 * np.identity(self.D)
                 Nk = len(Xk)
                 try:
                     sigma_value = np.linalg.inv(Nk * sk + self.r_prior)
@@ -191,7 +178,6 @@ class infinite_GMM:
                 newmeank = sc.stats.multivariate_normal.rvs(mean=mean_value, cov=sigma_value, size=1)
 
                 new_means.append(newmeank)
-                #meank = Xk.mean(axis=0)
                 # sampling sk
                 shape_parameter = Nk-1+self.beta+self.D
                 S = np.zeros_like(self.w)
@@ -199,9 +185,6 @@ class infinite_GMM:
                 for x in Xk:
                     S += (x - meank).reshape(self.D, 1).dot((x - meank).reshape(1, self.D))
 
-                #scale_parameter = (1. / (self.beta + Nk)) * (self.w * self.beta + np.sum((Xk - meank) ** 2))
-                # scale_parameter = (1. / (self.beta + Nk)) * (self.w*self.beta + S)
-                # scale_parameter = (1. / (self.beta + Nk)) *self.w + S
                 scale_parameter = np.linalg.inv((S+np.linalg.inv(self.w*self.beta)))
                 newSk = sc.stats.wishart.rvs(shape_parameter,scale_parameter,1)
                 new_S.append(newSk)
@@ -247,32 +230,24 @@ class infinite_GMM:
 
             self.w = sc.random.gamma(shape=shape_value, scale=1./scale_value, size=1)[0]
 
-            Tk = [0.001, 100]
-            x0 = 0.0000000000008
-            xk_plus_1 = 500
-
-            ars = sampling_package.adaptive_rejection_sampling.ARS(Tk, x0, xk_plus_1, 10000, self.__h_log_beta,
-                                                                   self.__h_derivative_beta, self.S, self.w)
-
-            numbres_beta_sampling = 10
-            beta_samplings = ars.perform_ARS(numbres_beta_sampling, False)
-            beta_samplings = np.exp(beta_samplings)
-            self.beta = beta_samplings[np.random.randint(0, numbres_beta_sampling, size=1)[0]]
+            # Tk = [0.001, 100]
+            # x0 = 0.0000000000008
+            # xk_plus_1 = 500
+            #
+            # ars = sampling_package.adaptive_rejection_sampling.ARS(Tk, x0, xk_plus_1, 10000, self.__h_log_beta,
+            #                                                        self.__h_derivative_beta, self.S, self.w)
+            #
+            # numbres_beta_sampling = 10
+            # beta_samplings = ars.perform_ARS(numbres_beta_sampling, False)
+            # beta_samplings = np.exp(beta_samplings)
+            # self.beta = beta_samplings[np.random.randint(0, numbres_beta_sampling, size=1)[0]]
 
 
         else:
-            #self.beta = 1. / sc.random.gamma(shape=1. / self.D, scale=1, size=1)[0]
-            #self.beta = sc.stats.invgamma.rvs(a=1. / self.D, size=1)[0]
 
             shape_value = K * self.beta + self.D
-            # np.sum(self.S, axis=0) == suma de matrices?
             scale_value = (K * self.beta + self.D) * np.linalg.inv((self.inverse_variance_sample + self.beta * np.sum(self.S, axis=0)))
-            #scale_value = (K * self.beta + self.D) * (self.inverse_variance_sample + self.beta * np.sum(self.S, axis=0))
             self.w = sc.stats.invwishart.rvs(shape_value, scale_value, size=1)
-
-
-
-
 
     def __sample_Z_1_dimension(self):
         N = len(self.X)
@@ -434,45 +409,11 @@ class infinite_GMM:
                     else:
                         k += 1
 
-    def __sample_alpha(self):
-
-        if False:
-            N = len(self.X)
-            K = len(self.means)
-
-            if K < 2:
-                print("error")
-
-            Tk = [0.001, 100]
-            x0 = 1e-70
-            xk_plus_1 = 500
-
-            ars = sampling_package.adaptive_rejection_sampling.ARS(Tk, x0, xk_plus_1, 10000, self.__h_log_alpha,
-                                                                   self.__h_derivative_alpha, K, N)
-
-            numbers_alpha_sampling = 100
-            alpha_sampling = ars.perform_ARS(numbers_alpha_sampling, True)
-
-            self.alpha = alpha_sampling[np.random.randint(0, numbers_alpha_sampling, size=1)[0]]
-        else:
-            # self.alpha = 1. / sc.random.gamma(shape=1, scale=1, size=1)[0]
-            self.alpha = self.alpha
-
     def learn_GMM(self, number_of_loops):
-        # plotGMM = printGMM.plotgaussianmixture(self.X, self.means, self.get_covariance_matrix(),
-        #                                        self.get_weights())
-        # plotGMM.print_seperategaussians()
         for i in range(number_of_loops):
-            if (i%50 == 0):
-                nameFile = "sampling it" + str(i)
-                printGMM.plotgaussianmixture(self.X, self.means, self.get_covariance_matrix(),
-                                             self.get_weights()).save_image(filename=nameFile + ".svg", separatedGaussians=True)
-                printGMM.plotgaussianmixture(self.X, self.means, self.get_covariance_matrix(),
-                                             self.get_weights()).save_image(filename=nameFile + ".jpg", separatedGaussians=True, svg_format=False)
             self.__sample_means_precision()
             self.__sample_lambda_r_priors()
             self.__sample_w_beta_priors()
             self.__sample_Z()
-            self.__sample_alpha()
             if len(self.S) < 2:
                 print("error")

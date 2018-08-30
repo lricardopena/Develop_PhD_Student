@@ -23,22 +23,23 @@ class plotgaussianmixture:
     def __plotOneDimensionGMM(self, plotpoints, separatedGaussians=False):
         starX = min(self.X - 3*max(self.covariances))
         stopX = max(self.X + 3*max(self.covariances))
-        X = np.linspace(starX, stopX, 100000)
+        granularity = 10000
+        X = np.linspace(starX, stopX, granularity)
         Y = np.zeros_like(X)
         Y_points = np.zeros_like(self.X)
 
         for i in range(len(self.weights)):
             mean, sigma, pik = self.means[i], self.covariances[i], self.weights[i]
             if plotpoints:
-                X = np.linspace(mean - 4*sigma, mean + 4*sigma, 10000)
+                X = np.linspace(mean - 4*sigma, mean + 4*sigma, granularity)
                 Y_points += pik*sc.stats.norm.pdf(self.X, loc=mean, scale=sigma)
 
             if separatedGaussians:
-                X = np.linspace(mean - 4 * sigma, mean + 4*sigma, 10000)
+                X = np.linspace(mean - 4 * sigma, mean + 4*sigma, granularity)
                 Y = pik * sc.stats.norm.pdf(X, loc=mean, scale=sigma)
                 plt.plot(X, Y)
             else:
-                Y += pik*sc.stats.norm.pdf(X, loc=mean, scale=sigma)
+                Y += sc.stats.norm.pdf(X, loc=mean, scale=sigma)
 
         if not separatedGaussians:
             plt.plot(X, Y)

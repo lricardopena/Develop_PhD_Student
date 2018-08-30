@@ -11,14 +11,15 @@ from scipy.special import gamma
 from scipy.special import gammaln
 from scipy.stats import norm
 
+
 def cholupdate(R, x, sign):
     p = np.size(x)
     x = x.T
     for k in range(p):
         if sign == '+':
             r = np.sqrt(R[k, k]**2 + x[k]**2)
-        elif sign == '-':
-          r = np.sqrt(R[k, k]**2 - x[k]**2)
+        else:
+            r = np.sqrt(R[k, k]**2 - x[k]**2)
         c = r/R[k, k]
         s = x[k]/R[k, k]
         R[k,k] = r
@@ -53,7 +54,7 @@ def returnBeta_sigma(X, Y, k):
     try:
         sigma = scaledinvchisquare(N - k, sSquare)
     except ValueError:
-        print "stop"
+        print("stop")
 
     variance = Vbeta * (sigma ** 2)
     if np.any(np.isinf(variance)) or np.any(np.isnan(variance)):
@@ -72,11 +73,10 @@ def returnBeta_sigma(X, Y, k):
         betaProposal = np.random.multivariate_normal(betahat, variance)
         return betaProposal, sigma
     except:
-        print "stop"
+        print("stop")
         #Checar cual de las dos
         #return betahat, sigma
         return Vbeta, sigma
-
 
 
 def inversechisqu(niu, tausquare):
@@ -94,7 +94,7 @@ def compute_number_of_clusters(X, maximun_number_of_clusters, number_cross_valid
         clusters_and_score = [1, 0]
 
         silhouette_score_list = []
-        for number_of_clusters in xrange(2, maximun_number_of_clusters):
+        for number_of_clusters in range(2, maximun_number_of_clusters):
             clusterer = KMeans(n_clusters=number_of_clusters)
             labels = clusterer.fit_predict(X)
             score_silhouette = silhouette_score(X, labels)
@@ -127,7 +127,7 @@ def samplingNew_muk_Sigmak_jeffreysPrior(Y):
     newMean = multivariate_normal.rvs(mean, newsigma /n)
 
     if newsigma <= 0:
-        print "stop"
+        print ("stop")
 
     return newsigma, newMean
 
@@ -245,6 +245,7 @@ def samplingMukAndSigmaK(Z, W, Psi0, kapa0, niu0, mu0, K):
 
     return np.array(newMeans), np.array(newSigmas)
 
+
 def Psi(X, W, Wj, j):
     PsiX = []
     Wtmp = W.copy()
@@ -281,6 +282,7 @@ def generateRowWj(Wj, X, W, j):
             i_plus_M_row[m + M] = phi_new[1].dot(phi_actual[1])
 
     return irow, i_plus_M_row
+
 
 def aceptanceRatio(Y, X, W, Wj, j, a0, b0, mu0, oldBeta, oldSigma, PsiX, oldL, oldLInverse, oldLLogDeterminant):
     W_new = W.copy()
@@ -374,8 +376,6 @@ def aceptanceRatio(Y, X, W, Wj, j, a0, b0, mu0, oldBeta, oldSigma, PsiX, oldL, o
     return W_new, mu_beta, sigma, PsiX_new, L, Linverse, Llogdeterminant
 
 
-
-
 def samplingWj_regresion(Y, X, W, mus, sigmas, Z, M, a0, b0, mu0):
     PsiX = phiFunction(X, W)
     beta, sigma = returnBeta_sigma(PsiX, Y, 1)
@@ -393,7 +393,7 @@ def samplingWj_regresion(Y, X, W, mus, sigmas, Z, M, a0, b0, mu0):
 
 def samplingGMM(N, means, cov, pi):
     sampling = np.zeros((N, 1))
-    for i in xrange(N):
+    for i in range(N):
         randomNumber = np.random.uniform()
         current = 0
         index = 0
@@ -406,7 +406,6 @@ def samplingGMM(N, means, cov, pi):
             index += 1
 
     return sampling
-
 
 
 def GEM(alpha, lenght):
@@ -423,6 +422,7 @@ def GEM(alpha, lenght):
     pi.append(1-np.sum(pi))
 
     return np.array(pi)
+
 
 def phiFunction(X, w):
     if isinstance(w, float):
@@ -441,11 +441,11 @@ def phiFunction(X, w):
     return 1./np.sqrt(resultPhi.shape[1]/2) * resultPhi
 
 
-
 def phi_xi(x, w):
     argument = w.dot(x).T[0]
 
     return np.concatenate((np.cos(argument), np.sin(argument)))
+
 
 def f(X):
     means = []
@@ -456,14 +456,17 @@ def f(X):
     Y = np.random.multivariate_normal(mean=means, cov=np.identity(len(means)), size=1)[0]
     return Y
 
+
 def trueKernel(X):
     return np.exp(-1.0/8 * X**2)*(1.0/2 + 1.0/2 * np.cos(3.0/4*np.pi*X))
+
 
 def BaNKKernel(X, means, sigmas, pik):
     value = np.zeros_like(X)
     for i in range(len(means)):
         value += pik[i]*np.exp(-1./(2*sigmas[i]) * X**2)* np.cos(means[i]*X)
     return value
+
 
 def generated_exits(X, W, beta, sigma):
     Y = []
@@ -473,6 +476,7 @@ def generated_exits(X, W, beta, sigma):
         Y.append(yi)
     return np.array(Y)
 
+
 def getPik(Z):
     Znk = np.array(Z)
     N = float(len(Z))
@@ -480,6 +484,8 @@ def getPik(Z):
     for k in range(len(pik)):
         pik[k] =  len(np.where(Znk == k)[0])/N
     return pik
+
+
 def functionf(Xi, means, cov, pik):
     Yi = []
     for x in Xi:
@@ -490,7 +496,7 @@ def functionf(Xi, means, cov, pik):
         Yi.append(y)
     return np.array(Yi)
 
-#means, cov, pik = np.array([0,2.*np.pi/6, 3.0/4* np.pi]), np.array([1.0/16, 1.0/16, 1.0/16]), np.array([1./3,1./3,1./3])
+# means, cov, pik = np.array([0,2.*np.pi/6, 3.0/4* np.pi]), np.array([1.0/16, 1.0/16, 1.0/16]), np.array([1./3,1./3,1./3])
 means, cov, realpik = np.array([0, 3. * np.pi / 4]), np.array([1.0 / 2**2, 1.0 / 2**2]), np.array([1. / 2, 1. / 2])
 N = 1000
 M = 250
@@ -498,8 +504,8 @@ sigma = 0.0001
 Xi = norm.rvs(loc=0, scale=4, size=N)
 omegas = samplingGMM(N=M, means=means, cov=cov, pi=realpik)
 beta = np.array(multivariate_normal.rvs(mean=np.zeros(2 * M), cov = np.identity(2 * M), size=1))
-#beta = np.random.normal(loc=0, scale=1, size= 2 * M)
-#beta = np.ones(2*M)
+# beta = np.random.normal(loc=0, scale=1, size= 2 * M)
+# beta = np.ones(2*M)
 Yi = f(Xi)
 #hiperparameters
 number_of_rounds = 5000
@@ -546,5 +552,5 @@ plt.show()
 PsiX = phiFunction(Xi, W)
 mu_beta, sigma = returnBeta_sigma(PsiX, Yi, 1)
 Y_i_generated = generated_exits(Xi, W, beta, sigma)
-print "something"
+print ("something")
 #Need compare Yi_generated with Yi
