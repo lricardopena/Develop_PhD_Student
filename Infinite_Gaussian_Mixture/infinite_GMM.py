@@ -231,7 +231,7 @@ class infinite_GMM:
             sum_result = np.zeros_like(variance_value_lambda)
             for row in self.means - self.lambda_prior:
                 sum_result += row.reshape(self.D, 1).dot(row.reshape(1, self.D))
-            scale_value_r =  1. / (K + 1)*np.linalg.inv(self.variance_sample + sum_result)
+            scale_value_r = 1. / (K + 1)*np.linalg.inv(self.variance_sample + sum_result)
 
             self.r_prior = sc.stats.wishart.rvs(shape_value_r, scale_value_r, size=1)
 
@@ -269,10 +269,6 @@ class infinite_GMM:
             scale_value = (K * self.beta + self.D) * np.linalg.inv((self.inverse_variance_sample + self.beta * np.sum(self.S, axis=0)))
             #scale_value = (K * self.beta + self.D) * (self.inverse_variance_sample + self.beta * np.sum(self.S, axis=0))
             self.w = sc.stats.invwishart.rvs(shape_value, scale_value, size=1)
-
-
-
-
 
     def __sample_Z_1_dimension(self):
         N = len(self.X)

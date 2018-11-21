@@ -59,10 +59,11 @@ def __main():
     initialK = np.random.randint(2, 50)
     Z = np.random.randint(0, initialK, size=len(X))
     learning_Gmm = infinite_GMM.infinite_GMM(X, initial_number_class=initialK, initialZ=Z)
-    learning_Gmm.learn_GMM(10000)
+    learning_Gmm.learn_GMM(500)
     plotGMM = printGMM.plotgaussianmixture(X, learning_Gmm.means, learning_Gmm.get_covariance_matrix(),
                                            learning_Gmm.get_weights())
     plotGMM.print_seperategaussians()
+    print("stop")
     # points = get_po
     # realmeans = np.array([np.mean(X1, axis=0), np.mean(X2, axis=0), np.mean(X3, axis=0), np.mean(X4, axis=0), np.mean(X5, axis=0)])
     # realCovariance = np.array([np.cov(X1.T), np.cov(X2.T), np.cov(X3.T), np.cov(X4.T), np.cov(X5.T)])

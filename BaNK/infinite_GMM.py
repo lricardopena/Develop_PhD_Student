@@ -9,9 +9,6 @@ import numpy as np
 import scipy as sc
 import scipy.special
 import scipy.stats
-
-import Sampling as sampling_package
-import Sampling.adaptive_rejection_sampling
 from sklearn.cluster import KMeans
 
 
@@ -22,12 +19,11 @@ class infinite_GMM:
 
         self.alpha = 1. / sc.random.gamma(shape=1, scale=1, size=1)[0]
 
-
         if self.oneDimension:
             self.D = 1
             self.beta = 1. / sc.random.gamma(shape=1, scale=1, size=1)[0]
             self.mean_sample = X.mean()
-            self.variance_sample = float(np.mean(abs(X - X.mean()) ** 2))
+            self.variance_sample = float(np.mean(abs(X - self.mean_sample) ** 2))
             self.lambda_prior = sc.random.normal(loc=self.mean_sample, scale=np.sqrt(self.variance_sample), size=1)[0]
             self.r_prior = sc.random.gamma(shape=1, scale=1. / self.variance_sample, size=1)[0]
             self.w = sc.random.gamma(shape=1, scale=self.variance_sample, size=1)[0]
@@ -146,6 +142,9 @@ class infinite_GMM:
 
             # sampling sk
             shape_parameter = self.beta + Nk
+            # scale_paremeter = (self.w * self.beta + np.sum((Xk - meank) ** 2))/(self.beta + Nk)
+            # scale_parameter = np.linalg.inv((S + np.linalg.inv(self.w * self.beta)))
+            # scale_paremeter = 1./((1./(self.w * self.beta) + np.sum((Xk - meank) ** 2))/(self.beta + Nk))
             scale_paremeter = (1. / (self.beta + Nk)) * (self.w * self.beta + np.sum((Xk - meank) ** 2))
             sk = 1./self.__sample_scaled_inverse_chi_square(shape_parameter, scale_paremeter)
             new_S.append(sk)

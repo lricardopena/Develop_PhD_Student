@@ -1,18 +1,20 @@
+import numpy as np
+from scipy.stats import beta
+from scipy.stats import norm
+from scipy.stats import multivariate_normal
+import matplotlib.pyplot as plt
+
 '''
-This implementation is made By: Luis Ricardo Pena Llamas, this code is an implementation of a Journal named:
-Rasmussen, C. E. (2000). The infinite Gaussian mixture model. In Advances in neural information processing systems (pp. 554-560).
+This implementation is made By: Msc Luis Ricardo Pena Llamas, this code is an implementation of a classification in kernel lerning.
 '''
 
-import random
-from scipy.stats import beta
-import numpy as np
 import scipy as sc
-import scipy.special
 from BaNK import bank
 
 
-class bank_regression(bank):
-    def __compute_log_model_evidence(self, omegas, a0=0.001, b0=0.001, alpha_prior=0.000001, miu0 = None):
+class bank_classification(bank):
+
+    def __compute_log_model_evidence(self, omegas, alpha_prior=0.000001, miu0 = None):
         '''
         :param omegas: the matrix with all w in W
         :param a0: loc prior for sigma value
@@ -21,31 +23,29 @@ class bank_regression(bank):
         :param miu0: mean prior for beta
         :return: the error with omegas corresponding
         '''
+        Phi_x = bank.matrix_phi(self, omegas)
         if miu0 is None:
-            Phi_x = self.__matrix_phi(omegas)
-            an = a0 + self.N/2.
+            # Lamda0 = 1./alpha_prior*np.identity(self.M*2 + 1)
             invLamba0 = alpha_prior*np.identity(self.M*2)
-            invLamban = Phi_x.T.dot(Phi_x) + invLamba0
-            Lamdan = np.linalg.inv(invLamban)
+            Lamdan = np.linalg.inv(Phi_x.T.dot(Phi_x) + invLamba0)
             miun = Lamdan.dot(Phi_x.T.dot(self.Y))
-            bn = b0 + 1./2*(self.Y.dot(self.Y) - miun.T.dot(invLamban).dot(miun))
         else:
-            miu0 = np.zeros(self.M * 2 + 1)
-            Phi_x = self.__matrix_phi(omegas)
-            an = a0 + self.N / 2.
-            Lamda0 = 1. / alpha_prior * np.identity(self.M * 2 + 1)
+            # miu0 = np.zeros(self.M * 2 + 1)
             invLamba0 = alpha_prior * np.identity(self.M * 2)
-            invLambdan = Phi_x.T.dot(Phi_x) + np.linalg.inv(Lamda0)
-            Lamdan = np.linalg.inv(invLambdan)
+            Lamdan = np.linalg.inv(Phi_x.T.dot(Phi_x) + invLamba0)
             miun = Lamdan.dot(invLamba0.dot(miu0) + Phi_x.T.dot(self.Y))
-            bn = b0 + 1. / 2 * (self.Y.dot(self.Y) + miu0.T.dot(invLamba0).dot(miu0) - miun.T.dot(
-                invLambdan).dot(miun))
-        result_log = 1./2*np.linalg.slogdet(Lamdan)[1] + a0*np.log(b0) + sc.special.gammaln(an)
-        result_log +=- an * np.log(bn) - sc.special.gammaln(a0) - (self.M * 2 + 1) / 2. * np.log(1. / alpha_prior)
+
+        result_log = 0
+        result_mu = Phi_x.dot(miun)
+
+        for x, y in zip(result_mu, self.Y):
+            log_p_y = x - np.log(np.exp(x) + 1)
+            if not (y == 1):
+                log_p_y -= log_p_y
+            result_log += log_p_y
         return result_log
 
     def __sample_omega(self):
-
         actual__log_error = self.__compute_log_model_evidence(self.omegas)
         for j in range(self.M):
             Zj = self.Z[j]
@@ -68,18 +68,6 @@ class bank_regression(bank):
                     actual__log_error = new_log_error
                     self.omegas = w_new
 
-    def __matrix_phi_with_X(self, omegas, X):
-        means = []
-        for x in X:
-            means.append(self.phi_xi(x, omegas))
-        return np.array(means)
-
-    def __matrix_phi(self, omegas):
-        means = []
-        for x in self.X:
-            means.append(self.phi_xi(x, omegas))
-        return np.array(means)
-
     def learn_kernel(self, number_swaps):
         for i in range(number_swaps):
             self.sampling_Z()
@@ -88,3 +76,22 @@ class bank_regression(bank):
             # self.__sample_priors()
 
         # self.sample_beta_sigma()
+
+    def predict_new_X(self, X, omegas=None, a0=0.001, b0=0.001, alpha_prior=0.000001, miu0 = None):
+        if omegas is None:
+            omegas = self.omegas
+
+        Phi_x = bank.matrix_phi_with_X(self, omegas, self.X)
+
+        if miu0 is None:
+            invLamba0 = alpha_prior * np.identity(self.M * 2)
+            Lamdan = np.linalg.inv(Phi_x.T.dot(Phi_x) + invLamba0)
+            miun = Lamdan.dot(Phi_x.T.dot(self.Y))
+        else:
+            # miu0 = np.zeros(self.M * 2 + 1)
+            invLamba0 = alpha_prior * np.identity(self.M * 2)
+            Lamdan = np.linalg.inv(Phi_x.T.dot(Phi_x) + invLamba0)
+            miun = Lamdan.dot(invLamba0.dot(miu0) + Phi_x.T.dot(self.Y))
+
+        Phi_x = bank.matrix_phi_with_X(self, omegas, X)
+        return np.round(Phi_x.dot(miun),0).astype(int)

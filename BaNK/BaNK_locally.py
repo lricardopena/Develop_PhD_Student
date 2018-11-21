@@ -1,24 +1,34 @@
+import numpy as np
+from scipy.stats import beta
+from scipy.stats import norm
+from scipy.stats import multivariate_normal
+import matplotlib.pyplot as plt
+
 '''
 This implementation is made By: Luis Ricardo Pena Llamas, this code is an implementation of a Journal named:
 Rasmussen, C. E. (2000). The infinite Gaussian mixture model. In Advances in neural information processing systems (pp. 554-560).
 '''
 
 import random
-from scipy.stats import beta
+
 import numpy as np
 import scipy as sc
 import scipy.special
+import scipy.stats
+import Sampling as sampling_package
+import Sampling.adaptive_rejection_sampling
 from sklearn.cluster import KMeans
-
+import infinite_GMM
 
 
 class bank:
-    def __init__(self, X, Y, M):
+    def __init__(self, X, Y, M, realomegas = None):
         self.X = X
         self.Y = Y
         self.M = M
-        self.constant = 1./np.sqrt(M)
         self.N = len(Y)
+        if not realomegas is None:
+            self.real_log_error = self.__compute_log_model_evidence(realomegas)
         self.oneDimension = (len(X.shape) == 1)
         K = np.random.randint(2, 14, size=1)[0]
         if self.oneDimension:
@@ -79,13 +89,9 @@ class bank:
         self.alpha = 1. / sc.random.gamma(shape=1, scale=1, size=1)[0]
         self.beta_prior = 1. / sc.random.gamma(shape=1, scale=1, size=1)[0]
 
+
     @staticmethod
     def __sample_scaled_inverse_chi_square(scale, shape):
-        '''
-        :param scale: Scale of inverse chi square
-        :param shape: Shape of inverse chi sqaure
-        :return: A sample from a scaled inverse chi square
-        '''
         return sc.stats.invgamma.rvs(a=scale / 2., scale=scale * shape / 2., size=1)[0]
 
     @staticmethod
@@ -140,114 +146,111 @@ class bank:
             scale_value = (K * self.beta_prior + self.D) * np.linalg.inv((self.inverse_variance_sample + self.beta_prior * np.sum(self.S, axis=0)))
             self.w_prior = sc.stats.invwishart.rvs(shape_value, scale_value, size=1)
 
-    def sampling_Z(self):
+    def __sampling_Z(self):
         if self.oneDimension:
             self.__sampling_Z_1_D()
         else:
-            self.__sampling_Z_moredimesions()
+            N = len(self.X)
+            order_sampling_Z = range(len(self.Z))
+            random.shuffle(order_sampling_Z)
+            r_prior_inverse = np.linalg.inv(self.r_prior)
+            w_inverse = np.linalg.inv(self.w_prior)
+            # shuffle the index to more fastest converge
 
-    def __sampling_Z_moredimesions(self):
-        N = self.M
-        order_sampling_Z = range(len(self.Z))
-        random.shuffle(order_sampling_Z)
-        r_prior_inverse = np.linalg.inv(self.r_prior)
-        w_inverse = np.linalg.inv(self.w_prior)
-        # shuffle the index to more fastest converge
+            inverseS = []
+            for k in range(len(self.means)):
+                try:
+                    inverseS.append(np.linalg.inv(self.S[k]))
+                except np.linalg.LinAlgError:
+                    inverseS.append(np.linalg.inv(self.S[k] + 0.0001 * np.identity(self.D)))
 
-        inverseS = []
-        for k in range(len(self.means)):
-            try:
-                inverseS.append(np.linalg.inv(self.S[k]))
-            except np.linalg.LinAlgError:
-                inverseS.append(np.linalg.inv(self.S[k] + 0.0001 * np.identity(self.D)))
+            for i in order_sampling_Z:
+                K = len(self.means)
+                new_means_precision = {}
+                probability_of_belongs_class = []
+                for k in range(K):
+                    Nk = len(np.where(self.Z == k)[0])
+                    if self.Z[i] == k:
+                        Nk -= 1
 
-        for i in order_sampling_Z:
-            K = len(self.means)
-            new_means_precision = {}
-            probability_of_belongs_class = []
-            for k in range(K):
-                Nk = len(np.where(self.Z == k)[0])
-                if self.Z[i] == k:
-                    Nk -= 1
+                    if Nk > 0:
+                        try:
+                            prob = np.log(float(Nk)) - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(
+                                self.omegas[i], mean=self.means[k].reshape(self.D, ), cov=inverseS[k])
+                        except (np.linalg.LinAlgError, ValueError):
+                            self.S[k] += 0.01 * np.identity(self.D)
+                            inverseS[k] = np.linalg.inv(self.S[k])
+                            prob = np.log(float(Nk)) - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(
+                                self.omegas[i], mean=self.means[k].reshape(self.D, ), cov=inverseS[k])
 
-                if Nk > 0:
-                    try:
-                        prob = np.log(float(Nk)) - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(
-                            self.omegas[i], mean=self.means[k].reshape(self.D, ), cov=inverseS[k])
-                    except (np.linalg.LinAlgError, ValueError):
-                        self.S[k] += 0.01 * np.identity(self.D)
-                        inverseS[k] = np.linalg.inv(self.S[k])
-                        prob = np.log(float(Nk)) - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(
-                            self.omegas[i], mean=self.means[k].reshape(self.D, ), cov=inverseS[k])
+                    else:
+                        meank = sc.stats.multivariate_normal.rvs(self.lambda_prior, r_prior_inverse, size=1)
+                        sk = sc.stats.wishart.rvs(self.beta_prior + self.D, w_inverse, size=1)
 
-                else:
-                    meank = sc.stats.multivariate_normal.rvs(self.lambda_prior, r_prior_inverse, size=1)
-                    sk = sc.stats.wishart.rvs(self.beta_prior + self.D, w_inverse, size=1)
+                        try:
+                            prob = - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(self.omegas[i], meank,
+                                                                                                      cov=np.linalg.inv(
+                                                                                                          sk))
+                        except np.linalg.LinAlgError:
+                            sk += 0.01 * np.identity(self.D)
+                            prob = - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(self.omegas[i], meank,
+                                                                                                      cov=np.linalg.inv(
+                                                                                                          sk))
 
-                    try:
-                        prob = - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(self.omegas[i], meank,
-                                                                                                  cov=np.linalg.inv(
-                                                                                                      sk))
-                    except np.linalg.LinAlgError:
-                        sk += 0.01 * np.identity(self.D)
-                        prob = - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(self.omegas[i], meank,
-                                                                                                  cov=np.linalg.inv(
-                                                                                                      sk))
+                        new_means_precision[k] = [meank, sk]
 
-                    new_means_precision[k] = [meank, sk]
+                    probability_of_belongs_class.append(prob)
+                meank = sc.stats.multivariate_normal.rvs(self.lambda_prior, r_prior_inverse, size=1)
+
+                sk = sc.stats.wishart.rvs(self.beta_prior + self.D, w_inverse, size=1)
+
+                try:
+                    prob = - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(self.omegas[i], meank,
+                                                                                              cov=np.linalg.inv(sk))
+                except (ValueError, np.linalg.LinAlgError):
+                    sk += 0.001 * np.identity(self.D)
+                    prob = - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(self.omegas[i], meank,
+                                                                                              cov=np.linalg.inv(sk))
+
+                new_means_precision[K] = [meank, sk]
 
                 probability_of_belongs_class.append(prob)
-            meank = sc.stats.multivariate_normal.rvs(self.lambda_prior, r_prior_inverse, size=1)
-
-            sk = sc.stats.wishart.rvs(self.beta_prior + self.D, w_inverse, size=1)
-
-            try:
-                prob = - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(self.omegas[i], meank,
-                                                                                          cov=np.linalg.inv(sk))
-            except (ValueError, np.linalg.LinAlgError):
-                sk += 0.001 * np.identity(self.D)
-                prob = - np.log(N - 1 + self.alpha) + sc.stats.multivariate_normal.logpdf(self.omegas[i], meank,
-                                                                                          cov=np.linalg.inv(sk))
-
-            new_means_precision[K] = [meank, sk]
-
-            probability_of_belongs_class.append(prob)
-            if np.sum(np.exp(probability_of_belongs_class)) > 0:
-                probability_of_belongs_class = np.exp(probability_of_belongs_class)
-            else:
-                probability_of_belongs_class -= np.min(probability_of_belongs_class)
-            probability_of_belongs_class = np.cumsum(
-                np.array(probability_of_belongs_class) / np.sum(probability_of_belongs_class))
-
-            u = np.random.uniform(size=1)[0]
-            for k, actualProb in enumerate(probability_of_belongs_class):
-                if actualProb >= u:
-                    if k in new_means_precision:  # If is a new mean an precision.
-                        if k < K:
-                            try:
-                                self.means[k] = new_means_precision[k][0].reshape(self.D, 1)
-                            except ValueError:
-                                self.means[k] = new_means_precision[k][0].reshape(self.D, )
-                            self.S[k] = new_means_precision[k][1]
-                            inverseS[k] = np.linalg.inv(self.S[k])
-                        else:
-                            self.means = np.concatenate((self.means.reshape(self.means.shape[0], self.D, 1),
-                                                         new_means_precision[k][0].reshape(1, self.D, 1)), axis=0)
-                            self.S = np.concatenate((self.S, new_means_precision[k][1].reshape(1, 2, 2)))
-                            inverseS.append(np.linalg.inv(new_means_precision[k][1]))
-                    self.Z[i] = k
-                    break
-
-        if len(self.means) != len(np.unique(self.Z)):
-            k = 0
-            while k < len(self.means):
-                if len(np.where(self.Z == k)[0]) <= 0:
-                    self.means = np.delete(self.means, k, axis=0)
-                    self.S = np.delete(self.S, k, axis=0)
-                    del inverseS[k]
-                    self.Z[np.where(self.Z > k)[0]] -= 1
+                if np.sum(np.exp(probability_of_belongs_class)) > 0:
+                    probability_of_belongs_class = np.exp(probability_of_belongs_class)
                 else:
-                    k += 1
+                    probability_of_belongs_class -= np.min(probability_of_belongs_class)
+                probability_of_belongs_class = np.cumsum(
+                    np.array(probability_of_belongs_class) / np.sum(probability_of_belongs_class))
+
+                u = np.random.uniform(size=1)[0]
+                for k, actualProb in enumerate(probability_of_belongs_class):
+                    if actualProb >= u:
+                        if k in new_means_precision:  # If is a new mean an precision.
+                            if k < K:
+                                try:
+                                    self.means[k] = new_means_precision[k][0].reshape(self.D, 1)
+                                except ValueError:
+                                    self.means[k] = new_means_precision[k][0].reshape(self.D, )
+                                self.S[k] = new_means_precision[k][1]
+                                inverseS[k] = np.linalg.inv(self.S[k])
+                            else:
+                                self.means = np.concatenate((self.means.reshape(self.means.shape[0], self.D, 1),
+                                                             new_means_precision[k][0].reshape(1, self.D, 1)), axis=0)
+                                self.S = np.concatenate((self.S, new_means_precision[k][1].reshape(1, 2, 2)))
+                                inverseS.append(np.linalg.inv(new_means_precision[k][1]))
+                        self.Z[i] = k
+                        break
+
+            if len(self.means) != len(np.unique(self.Z)):
+                k = 0
+                while k < len(self.means):
+                    if len(np.where(self.Z == k)[0]) <= 0:
+                        self.means = np.delete(self.means, k, axis=0)
+                        self.S = np.delete(self.S, k, axis=0)
+                        del inverseS[k]
+                        self.Z[np.where(self.Z > k)[0]] -= 1
+                    else:
+                        k += 1
 
     def __sampling_Z_1_D(self):
         N = self.M
@@ -271,7 +274,7 @@ class bank:
                     sk = sc.random.gamma(shape=self.beta_prior, scale=1. / self.w_prior, size=1)[0]
 
                     new_means_precision[k] = [meank, sk]
-                    prob = - np.log(N - 1 + self.alpha) + 1. / 2 * np.log(sk) - (sk * (self.omegas[i] - meank) ** 2) / 2.
+                    prob = - np.log(N - 1 + self.alpha) + 1. / 2 * np.log(sk) - (sk * (self.X[i] - meank) ** 2) / 2.
 
                 probability_of_belongs_class.append(prob)
             meank = sc.random.normal(loc=self.lambda_prior, scale=np.sqrt(1. / self.r_prior), size=1)[0]
@@ -309,7 +312,7 @@ class bank:
                 else:
                     k += 1
 
-    def sampling_mu_sigma(self):
+    def __sampling_mu_sigma(self):
         if self.oneDimension:
             self.__sampling_mu_sigma_1_D()
         else:
@@ -384,7 +387,7 @@ class bank:
         if omegas is None:
             omegas = self.omegas
         if miu0 is None:
-            Phi_x = self.matrix_phi(omegas)
+            Phi_x = self.__matrix_phi(omegas)
             an = a0 + self.N/2.
 
             # Lamda0 = 1./ alpha_prior*np.identity(self.M*2 + 1)
@@ -398,7 +401,7 @@ class bank:
             bn = b0 + 1./2*(self.Y.dot(self.Y) - miun.T.dot(invLambdan).dot(miun))
         else:
             miu0 = np.zeros(self.M * 2)
-            Phi_x = self.matrix_phi(omegas)
+            Phi_x = self.__matrix_phi(omegas)
             an = a0 + self.N / 2.
 
             # Lamda0 = 1. / alpha_prior * np.identity(self.M * 2 + 1)
@@ -417,6 +420,7 @@ class bank:
         Sigma = an / bn * Lamdan
         df = 2 * an
         self.beta = self.__multivariate_t_rvs(mean, Sigma, df)[0]
+
 
     def __returnBeta_sigma(self, X, k):
         N = len(X)
@@ -451,7 +455,8 @@ class bank:
             return Vbeta, sigma
 
     def get_Phi_X(self, X, omegas):
-        return self.matrix_phi_with_X(omegas, X)
+        return self.__matrix_phi_with_X(omegas, X)
+
 
     def predict_new_X_beta_omega(self, X):
         self.sample_beta_sigma()
@@ -466,7 +471,7 @@ class bank:
         if omegas is None:
             omegas = self.omegas
         if miu0 is None:
-            Phi_x = self.matrix_phi(omegas)
+            Phi_x = self.__matrix_phi(omegas)
             an = a0 + self.N/2.
 
             Lamda0 = 1./alpha_prior*np.identity(self.M*2)
@@ -483,7 +488,7 @@ class bank:
             df = 2*an
         else:
             miu0 = np.zeros(self.M * 2)
-            Phi_x = self.matrix_phi(omegas)
+            Phi_x = self.__matrix_phi(omegas)
             an = a0 + self.N / 2.
 
             Lamda0 = 1. / alpha_prior * np.identity(self.M * 2)
@@ -529,23 +534,34 @@ class bank:
 
             self.r_prior = sc.stats.wishart.rvs(shape_value_r, scale_value_r, size=1)
 
+
     def return_mean_variance_learning(self, X, omegas, a0=0.001, b0=0.001, alpha_prior=0.000001, miu0 = None):
         if miu0 is None:
-            Phi_x = self.matrix_phi(omegas)
+            Phi_x = self.__matrix_phi(omegas)
             an = a0 + self.N/2.
+
             Lamda0 = 1./alpha_prior*np.identity(self.M*2 + 1)
+
             Lamdan = np.linalg.inv(Phi_x.T.dot(Phi_x) + np.linalg.inv(Lamda0))
+
+            # miun = np.linalg.inv(Lamdan).dot(Lamda0.dot(miu0) + Phi_x.T.dot(self.Y))
             miun = Lamdan.dot(Phi_x.T.dot(self.Y))
             bn = b0 + 1./2*(self.Y.dot(self.Y) - miun.T.dot(np.linalg.inv(Lamdan)).dot(miun))
+
             Phi_x_new = self.get_Phi_X(X, omegas)
             mean = Phi_x_new.dot(miun)
-            Sigma = an/bn*(np.identity(len(X)) + Phi_x_new.dot(Lamdan).dot(Phi_x_new.T))
+            Sigma = an/bn*(np.identity(len(X))+ Phi_x_new.dot(Lamdan).dot(Phi_x_new.T))
+            df = 2*an
         else:
             miu0 = np.zeros(self.M * 2 + 1)
-            Phi_x = self.matrix_phi(omegas)
+            Phi_x = self.__matrix_phi(omegas)
             an = a0 + self.N / 2.
+
             Lamda0 = 1. / alpha_prior * np.identity(self.M * 2 + 1)
+
             Lamdan = np.linalg.inv(Phi_x.T.dot(Phi_x) + np.linalg.inv(Lamda0))
+
+            # miun = np.linalg.inv(Lamdan).dot(Lamda0.dot(miu0) + Phi_x.T.dot(self.Y))
             miun = Lamdan.dot(np.linalg.inv(Lamda0).dot(miu0) + Phi_x.T.dot(self.Y))
             bn = b0 + 1. / 2 * (self.Y.dot(self.Y) + miu0.T.dot(np.linalg.inv(Lamda0)).dot(miu0) - miun.T.dot(
                 np.linalg.inv(Lamdan)).dot(miun))
@@ -553,37 +569,133 @@ class bank:
             Phi_x_new = self.get_Phi_X(X, omegas)
             mean = Phi_x_new.dot(miun)
             Sigma = an / bn * (np.identity(len(X)) + Phi_x_new.dot(Lamdan).dot(Phi_x_new.T))
+            df = 2 * an
         return mean, Sigma
 
-    @staticmethod
-    def phi_xi( x, w):
-        argument = w.dot(x).T
-        return 1./np.sqrt(len(w)) * np.concatenate((np.cos(argument), np.sin(argument)))
+    def __compute_log_model_evidence(self, omegas, a0=0.001, b0=0.001, alpha_prior=0.000001, miu0 = None):
+        '''
+        :param omegas: the matrix with all w in W
+        :param a0: loc prior for sigma value
+        :param b0: scale prior for sigma value
+        :param alpha_prior: scale prior for beta
+        :param miu0: mean prior for beta
+        :return: the error with omegas corresponding
+        '''
+        if miu0 is None:
+            Phi_x = self.__matrix_phi(omegas)
+            an = a0 + self.N/2.
 
-    def matrix_phi_with_X(self, omegas, X):
+            # Lamda0 = 1./alpha_prior*np.identity(self.M*2 + 1)
+            invLamba0 = alpha_prior*np.identity(self.M*2)
+
+            Lamdan = np.linalg.inv(Phi_x.T.dot(Phi_x) + invLamba0)
+
+            # miun = np.linalg.inv(Lamdan).dot(Lamda0.dot(miu0) + Phi_x.T.dot(self.Y))
+            miun = Lamdan.dot(Phi_x.T.dot(self.Y))
+            bn = b0 + 1./2*(self.Y.dot(self.Y) - miun.T.dot((Phi_x.T.dot(Phi_x) + invLamba0)).dot(miun))
+
+            # mean = Phi_x.dot(miun)
+            # Sigma = an/bn*(np.identity(self.N)+ Phi_x.dot(Lamdan).dot(Phi_x.T))
+            # df = 2*an
+        else:
+            miu0 = np.zeros(self.M * 2 + 1)
+            Phi_x = self.__matrix_phi(omegas)
+            an = a0 + self.N / 2.
+
+            Lamda0 = 1. / alpha_prior * np.identity(self.M * 2 + 1)
+
+            Lamdan = np.linalg.inv(Phi_x.T.dot(Phi_x) + np.linalg.inv(Lamda0))
+
+            # miun = np.linalg.inv(Lamdan).dot(Lamda0.dot(miu0) + Phi_x.T.dot(self.Y))
+            miun = Lamdan.dot(np.linalg.inv(Lamda0).dot(miu0) + Phi_x.T.dot(self.Y))
+            bn = b0 + 1. / 2 * (self.Y.dot(self.Y) + miu0.T.dot(np.linalg.inv(Lamda0)).dot(miu0) - miun.T.dot(
+                np.linalg.inv(Lamdan)).dot(miun))
+
+            # mean = Phi_x.dot(miun)
+            # Sigma = an / bn * (np.identity(self.N) + Phi_x.dot(Lamdan).dot(Phi_x.T))
+            # df = 2 * an
+
+        result_log = 1./2*np.linalg.slogdet(Lamdan)[1] + a0*np.log(b0) + sc.special.gammaln(an)
+        # np.linalg.slogdet(Lamda0) = (self.M * 2 + 1) * np.log(1. / alpha_prior)
+        # result_log += - self.N/2. * np.log(2*np.pi) - an*np.log(bn) - sc.special.gammaln(a0) - (self.M * 2 + 1)/2.*np.log(1./alpha_prior)
+        result_log +=- an * np.log(bn) - sc.special.gammaln(a0) - (self.M * 2 + 1) / 2. * np.log(1. / alpha_prior)
+        # return_result = self.__log_multivariate_t_pdf(self.Y, mean, Sigma, df)
+        return result_log
+
+    def __sample_omega(self):
+        if self.oneDimension:
+            self.__sample_omega_1_D()
+        else:
+            actual__log_error = self.__compute_log_model_evidence(self.omegas)
+            for j in range(self.M):
+                Zj = self.Z[j]
+                w_proposal = sc.random.multivariate_normal(self.means[Zj], np.linalg.inv(self.S[Zj]), size=1)[0]
+                w_new = self.omegas.copy()
+                w_new[j] = w_proposal
+                new_log_error = self.__compute_log_model_evidence(w_new)
+
+                result = new_log_error - actual__log_error
+                if result > 0:
+                    actual__log_error = new_log_error
+                    self.omegas = w_new
+                else:
+                    u = np.random.rand(1)[0]
+                    p = np.exp(result)
+                    if p >= u: # Acept with certain probability
+                        actual__log_error = new_log_error
+                        self.omegas = w_new
+
+    def __sample_omega_1_D(self):
+        actual__log_error = self.__compute_log_model_evidence(self.omegas)
+        for j in range(self.M):
+            Zj = self.Z[j]
+            w_proposal = sc.random.normal(self.means[Zj], np.sqrt(1./self.S[Zj]), size=1)[0]
+            w_new = self.omegas.copy()
+            w_new[j] = w_proposal
+            new_log_error = self.__compute_log_model_evidence(w_new)
+
+            result = new_log_error - actual__log_error
+            if result > 0:
+                actual__log_error = new_log_error
+                self.omegas = w_new
+            else:
+                u = np.random.rand(1)[0]
+                p = np.exp(result)
+                if p >= u: # Acept with certain probability
+                    actual__log_error = new_log_error
+                    self.omegas = w_new
+
+    @staticmethod
+    def phi_xi(x, w):
+        argument = w.dot(x).T
+
+        return np.concatenate((np.cos(argument), np.sin(argument)))
+
+    def __matrix_phi_with_X(self, omegas, X):
         means = []
         for x in X:
             means.append(self.phi_xi(x, omegas))
         return np.array(means)
 
-    def matrix_phi(self, omegas):
-        row = []
+    def __matrix_phi(self, omegas):
+        means = []
         for x in self.X:
-            row.append(self.phi_xi(x, omegas))
-        return np.array(row)
+            means.append(self.phi_xi(x, omegas))
+        return np.array(means)
 
     def f(self, omegas):
-        Phi_x = self.matrix_phi(omegas)
+        Phi_x = self.__matrix_phi(omegas)
 
         means = np.array(Phi_x).dot(self.beta)
         Y = np.random.multivariate_normal(mean=means, cov=np.identity(len(means)), size=1)[0]
         return Y
 
+
     def get_beta_sigma_with_given_omega(self, omegas, a0=0.001, b0=0.001, alpha_prior=0.000001, miu0 = None):
         #sample
         if miu0 is None:
             miu0 = np.zeros(self.M * 2 + 1)
-        Phi_x = self.matrix_phi(omegas)
+        Phi_x = self.__matrix_phi(omegas)
         an = a0 + self.N/2.
 
         Lamda0 = alpha_prior*np.identity(self.M*2 + 1)
@@ -611,6 +723,15 @@ class bank:
         self.mean_sample = self.omegas.mean(axis=0)
         self.variance_sample = float(np.mean(abs(self.omegas - self.mean_sample) ** 2))
         self.inverse_variance_sample = 1. / self.variance_sample
+
+    def learn_kernel(self, number_swaps):
+        for i in range(number_swaps):
+            self.__sampling_Z()
+            self.__sampling_mu_sigma()
+            self.__sample_omega()
+            # self.__sample_priors()
+
+        self.sample_beta_sigma()
 
     def get_pik(self):
         K = len(self.means)

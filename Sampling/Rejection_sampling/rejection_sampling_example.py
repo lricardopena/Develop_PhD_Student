@@ -42,7 +42,7 @@ def main():
         else:
             X_rejected.append(x_proposal)
 
-    X = np.linspace(10, 120)
+    X = np.linspace(10, 120, 10000)
     Y = f(X)
 
     Y_envelop = g_u(X)
@@ -58,7 +58,7 @@ def main():
     plt.legend()
     plt.show()
 
-    X = np.linspace(10, 120)
+    X = np.linspace(10, 120, 10000)
     Y = f(X)
 
     Y_envelop = g_u(X)

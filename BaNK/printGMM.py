@@ -39,7 +39,7 @@ class plotgaussianmixture:
                 Y = pik * sc.stats.norm.pdf(X, loc=mean, scale=sigma)
                 plt.plot(X, Y)
             else:
-                Y += sc.stats.norm.pdf(X, loc=mean, scale=sigma)
+                Y += pik * sc.stats.norm.pdf(X, loc=mean, scale=sigma)
 
         if not separatedGaussians:
             plt.plot(X, Y)
