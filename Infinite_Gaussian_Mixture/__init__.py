@@ -1,9 +1,7 @@
-import infinite_GMM
+from Develop_PhD_Student.Infinite_Gaussian_Mixture import infinite_GMM, printGMM, get_point_from_svg, learning_GMM
 import numpy as np
-import printGMM
-import get_point_from_svg
 import random
-import learning_GMM
+
 
 def generate_GMM(means, covariance, pik, size):
     X = []

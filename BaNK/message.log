@@ -1,0 +1,27 @@
+-------------------swaps: 5 Enter Locally, Time: Fri Mar 15 14:53:11 2019------------------------------------
+Locally stationary kernel Learning: 
+
+Start train ---------------------------Cancer Breast-------------------------Time: Fri Mar 15 14:53:11 2019----------
+Initial:   Cancer Breast full X score: 0.6274165202108963   Time: Fri Mar 15 14:53:14 2019
+Swap: 0/5  Cancer Breast full X score: 0.9015817223198594   Time: Fri Mar 15 14:57:40 2019
+Confussion matrix full set: 
+[[176  36]
+ [ 20 337]]
+Swap: 1/5  Cancer Breast full X score: 0.9086115992970123   Time: Fri Mar 15 15:02:04 2019
+Confussion matrix full set: 
+[[177  35]
+ [ 17 340]]
+Swap: 2/5  Cancer Breast full X score: 0.9086115992970123   Time: Fri Mar 15 15:06:28 2019
+Confussion matrix full set: 
+[[183  29]
+ [ 23 334]]
+Swap: 3/5  Cancer Breast full X score: 0.9103690685413005   Time: Fri Mar 15 15:10:54 2019
+Confussion matrix full set: 
+[[181  31]
+ [ 20 337]]
+Swap: 4/5  Cancer Breast full X score: 0.9121265377855887   Time: Fri Mar 15 15:15:19 2019
+Confussion matrix full set: 
+[[183  29]
+ [ 21 336]]
+End train ---------------------------Cancer Breast-------------------------Time: Fri Mar 15 15:15:22 2019----------
+score: Cancer Breast 0.5614035087719298 swaps: 5 M1: 41 M2: 41

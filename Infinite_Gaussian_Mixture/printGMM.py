@@ -4,6 +4,7 @@ import scipy as sc
 import scipy.stats
 from matplotlib import patches
 
+
 class plotgaussianmixture:
     def __init__(self, X, means, covariances, weights):
         self.X = X

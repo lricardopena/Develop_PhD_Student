@@ -1,0 +1,22 @@
+Begin 1 of 5 at Wednesday, 21. November 2018 12:37PM
+End 1 of 5 at Wednesday, 21. November 2018 01:14PM
+Training time: 0:36:12.922000
+Begin 2 of 5 at Wednesday, 21. November 2018 01:14PM
+End 2 of 5 at Wednesday, 21. November 2018 01:50PM
+Training time: 0:36:15.821000
+Begin 3 of 5 at Wednesday, 21. November 2018 01:50PM
+End 3 of 5 at Wednesday, 21. November 2018 02:28PM
+Training time: 0:37:39.116000
+Begin 4 of 5 at Wednesday, 21. November 2018 02:28PM
+End 4 of 5 at Wednesday, 21. November 2018 03:06PM
+Training time: 0:38:11.761000
+Begin 5 of 5 at Wednesday, 21. November 2018 03:06PM
+End 5 of 5 at Wednesday, 21. November 2018 03:45PM
+Training time: 0:39:17.423000
+Scores of Airfoil with 250 angles and 30 swaps
+Range: 37.607
+MSE Airfoil: 26.972601613637448 +- 72.61314076182607
+MSE Airfoil: 27.61040648897029 +- 60.469414045418894
+MSE Airfoil: 14.994797217114913 +- 29.195549332028754
+MSE Airfoil: 14.616178111772992 +- 22.459837307530968
+MSE Airfoil: 11.385815828580219 +- 15.18264532309568

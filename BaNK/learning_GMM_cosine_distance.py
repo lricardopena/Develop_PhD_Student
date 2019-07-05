@@ -158,7 +158,7 @@ def updateAlocation(pik, means, sigmas, X, Z):
         p = []
         for s in range(0, K):
             p.append(sc.stats.multivariate_normal.logpdf(X[n],means[s], sigmas[s]))
-            # p.append( -( constants[s] + (-1.0/2 * np.dot(np.dot((X[n] - means[s]).T, sigmaInverse[s]), (X[n] - means[s])))) )
+            # p.append( -( constants[s] + (-1.0/2 * np.dot(np.dot((X[n] - means_omega[s]).T, sigmaInverse[s]), (X[n] - means_omega[s])))) )
 
         if not np.sum(p) == 0:
             p = np.array(p)
@@ -247,7 +247,7 @@ realmeans, realcov, realpik = np.array([[22, 17], [85 , 150], [85, 15], [850, 15
                               np.array([[[1.2,0], [0, 1.5]], [[1.2,0], [0, 1.5]], [[1.2,0], [0, 1.5]], [[1.2,0], [0, 1.5]], [[1.2,0], [0, 1.5]]]), np.array([1.0/5, 1.0/5, 1.0/5, 1.0/5, 1./5])
 #realmeans, realcov = 10 * realmeans,  10 * realcov
 #realcov = 10*realcov
-#X = samplingGMM(N,means=realmeans, cov=realcov,pi=realpik)
+#X = samplingGMM(N,means_omega=realmeans, cov=realcov,pi=realpik)
 X1 = multivariate_normal.rvs(mean=realmeans[0], cov=realcov[0], size=1500)
 X2 = multivariate_normal.rvs(mean=realmeans[1], cov=realcov[1], size=1500)
 X3 = multivariate_normal.rvs(mean=realmeans[2], cov=realcov[2], size=1500)

@@ -149,7 +149,7 @@ def updateMeansAndCovariances(r, xi, tau, ellInverse, Z, X, means, lambdaInverse
     return newMeans, newlamdaInverse
 
 
-# Derive the missing data Z, move type c
+# Derive the missing data Z1, move type c
 def updateAlocation(pi, means, lambdaInverse, X, Z):
     N = len(X)
     M = len(means)
@@ -325,8 +325,8 @@ def splitOneComponent(pi, means, lambdaInverse, A, Z, delta, X, tau, niu, rhoSqu
 
     pnk = np.log(newPik) + sc.stats.multivariate_normal.logpdf(x=X[Z[k]], mean=newMeank, cov=sigmak)
     pnj = np.log(newPij) + sc.stats.multivariate_normal.logpdf(x=X[Z[k]], mean=newMeanj, cov=sigmaj)
-    #pnk = np.log(newPik) - 1./2 * np.log(np.linalg.det(sigmak)) - 1.0/2 * (X[Z[k]] - newMeank).dot(np.linalg.inv(sigmak)).dot((X[Z[k]] - newMeank).T).diagonal()
-    #pnj = np.log(newPij) - 1./2 * np.log(np.linalg.det(sigmaj)) - 1.0/2 * (X[Z[k]] - newMeanj).dot(np.linalg.inv(sigmaj)).dot((X[Z[k]] - newMeanj).T).diagonal()
+    #pnk = np.log(newPik) - 1./2 * np.log(np.linalg.det(sigmak)) - 1.0/2 * (X[Z1[k]] - newMeank).dot(np.linalg.inv(sigmak)).dot((X[Z1[k]] - newMeank).T).diagonal()
+    #pnj = np.log(newPij) - 1./2 * np.log(np.linalg.det(sigmaj)) - 1.0/2 * (X[Z1[k]] - newMeanj).dot(np.linalg.inv(sigmaj)).dot((X[Z1[k]] - newMeanj).T).diagonal()
 
 
     for i, pnkj in enumerate(np.column_stack((pnk,pnj))):
@@ -714,7 +714,7 @@ def birthOfAnEmptyComponent(pi, means, lambdaInverse, Z, xi, tau, r, niu, rhoSqu
     ellInverse = np.append(ellInverse, [gamma.rvs(1.0 / 2, 1.0 / rhoSquare * 1.0 / 2, size=D)], axis=0)
 
     pi = np.append(pi, [newpi], axis=0)
-    #Now we have to sampling the new means an covariance matrix
+    #Now we have to sampling the new means_omega an covariance matrix
 
     #Append the new parameters
     newLambdaInverse = np.zeros(D)
@@ -829,7 +829,7 @@ def computeMatrices(lamdaInverse,A):
 N = 1500
 realmeans, realcov, realpik = np.array([[17.5, 5.5], [12.5,11], [3,8]]), np.array([[[1.2,0], [0, 1.5]], [[1.2,0], [0, 1.5]], [[1.2,0], [0, 1.5]]],), np.array([1.0/3, 1.0/3, 1.0/3])
 #realmeans, realcov, realpik = np.array([[2200, 1700], [85,115], [1,3]]), np.array([[[12,0], [0, 15]], [[12,0], [0, 15]], [[12,0], [0, 15]]],), np.array([1.0/3, 1.0/3, 1.0/3])
-#X = samplingGMM(N,means=realmeans, cov=realcov,pi=realpik)
+#X = samplingGMM(N,means_omega=realmeans, cov=realcov,pi=realpik)
 X1 = multivariate_normal.rvs(mean=realmeans[0], cov=realcov[0], size=150)
 X2 = multivariate_normal.rvs(mean=realmeans[1], cov=realcov[1], size=150)
 X3 = multivariate_normal.rvs(mean=realmeans[2], cov=realcov[2], size=150)

@@ -143,7 +143,7 @@ class infinite_GMM:
             # sampling sk
             shape_parameter = self.beta + Nk
             # scale_paremeter = (self.w * self.beta + np.sum((Xk - meank) ** 2))/(self.beta + Nk)
-            # scale_parameter = np.linalg.inv((S + np.linalg.inv(self.w * self.beta)))
+            # scale_parameter = np.linalg.inv((S_omega + np.linalg.inv(self.w * self.beta)))
             # scale_paremeter = 1./((1./(self.w * self.beta) + np.sum((Xk - meank) ** 2))/(self.beta + Nk))
             scale_paremeter = (1. / (self.beta + Nk)) * (self.w * self.beta + np.sum((Xk - meank) ** 2))
             sk = 1./self.__sample_scaled_inverse_chi_square(shape_parameter, scale_paremeter)
@@ -234,7 +234,7 @@ class infinite_GMM:
             # xk_plus_1 = 500
             #
             # ars = sampling_package.adaptive_rejection_sampling.ARS(Tk, x0, xk_plus_1, 10000, self.__h_log_beta,
-            #                                                        self.__h_derivative_beta, self.S, self.w)
+            #                                                        self.__h_derivative_beta, self.S_omega, self.w)
             #
             # numbres_beta_sampling = 10
             # beta_samplings = ars.perform_ARS(numbres_beta_sampling, False)

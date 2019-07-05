@@ -10,10 +10,10 @@ import scipy as sc
 import scipy.special
 import scipy.stats
 
-import Sampling as sampling_package
-import Sampling.adaptive_rejection_sampling
+import Develop_PhD_Student.Sampling as sampling_package
+import Develop_PhD_Student.Sampling.adaptive_rejection_sampling
 from sklearn.cluster import KMeans
-import printGMM
+import Develop_PhD_Student.Infinite_Gaussian_Mixture.printGMM
 
 
 class infinite_GMM:

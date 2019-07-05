@@ -148,7 +148,7 @@ def updateMeansAndCovariances(r, xi, tau, ellInverse, Z, X, means, lambdaInverse
 
 
 
-#Derive the missing data Z, move type c
+#Derive the missing data Z1, move type c
 def updateAlocation(pi, means, lambdaInverse, X, Z):
     N = len(X)
     M = len(means)
@@ -696,7 +696,7 @@ def birthOfAnEmptyComponent(pi, means, lambdaInverse, Z, xi, tau, r, niu, rhoSqu
     ellInverse = np.append(ellInverse, [gamma.rvs(1.0 / 2, 1.0 / rhoSquare * 1.0 / 2, size=D)], axis=0)
 
     pi = np.append(pi, [newpi], axis=0)
-    #Now we have to sampling the new means an covariance matrix
+    #Now we have to sampling the new means_omega an covariance matrix
 
     #Append the new parameters
     newLambdaInverse = np.zeros(D)
